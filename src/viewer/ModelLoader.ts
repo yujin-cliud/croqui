@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MANNEQUIN_DIMENSIONS, MANNEQUIN_COLOR, MANNEQUIN_JOINT_COLOR } from '../constants/mannequin';
+import { MANNEQUIN_DIMENSIONS, MANNEQUIN_COLOR, MANNEQUIN_JOINT_COLOR, FINGER_LENGTH_SCALES, TOE_SCALES } from '../constants/mannequin';
 import type { BoneName } from '../types/Pose';
 
 export type MannequinModel = {
@@ -18,6 +18,142 @@ function createJointSphere(radius: number, material: THREE.Material): THREE.Mesh
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
+}
+
+// 角を丸めた多角形のShapeを作る(頂点列は反時計回り)。各角は隣接辺方向へ
+// cornerRadiusぶん手前から曲線でつなぐことで、木製マネキンらしい丸みを出す。
+function createRoundedPolygonShape(points: THREE.Vector2[], cornerRadius: number): THREE.Shape {
+  const shape = new THREE.Shape();
+  const count = points.length;
+
+  const edgePoint = (from: THREE.Vector2, to: THREE.Vector2): THREE.Vector2 => {
+    const direction = to.clone().sub(from);
+    const distance = Math.min(cornerRadius, direction.length() / 2);
+    return from.clone().add(direction.normalize().multiplyScalar(distance));
+  };
+
+  for (let i = 0; i < count; i += 1) {
+    const previous = points[(i + count - 1) % count];
+    const current = points[i];
+    const next = points[(i + 1) % count];
+    const start = edgePoint(current, previous);
+    const end = edgePoint(current, next);
+
+    if (i === 0) {
+      shape.moveTo(start.x, start.y);
+    } else {
+      shape.lineTo(start.x, start.y);
+    }
+    // 角そのものを制御点にした2次曲線で丸める
+    shape.quadraticCurveTo(current.x, current.y, end.x, end.y);
+  }
+  shape.closePath();
+  return shape;
+}
+
+// 骨盤: 上辺が広く下へ向かって細くなる、丸みのある逆台形の立体。
+// 原点は従来のBoxGeometry同様に中心のまま(既存ポーズやオフセット計算に影響しない)。
+function createPelvisMesh(material: THREE.Material): THREE.Mesh {
+  const d = MANNEQUIN_DIMENSIONS;
+  const halfTop = d.pelvisTopWidth / 2;
+  const halfBottom = d.pelvisBottomWidth / 2;
+  const halfHeight = d.pelvisSize[1] / 2;
+
+  // 反時計回り: 右上 → 左上 → 左下 → 右下
+  const outline = [
+    new THREE.Vector2(halfTop, halfHeight),
+    new THREE.Vector2(-halfTop, halfHeight),
+    new THREE.Vector2(-halfBottom, -halfHeight),
+    new THREE.Vector2(halfBottom, -halfHeight),
+  ];
+  const shape = createRoundedPolygonShape(outline, d.pelvisCornerRadius);
+
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: d.pelvisDepth,
+    bevelEnabled: true,
+    bevelThickness: d.pelvisBevel,
+    bevelSize: d.pelvisBevel,
+    bevelSegments: 3,
+    curveSegments: 8,
+  });
+  // 押し出しはZ+方向へ伸びるため、中心を原点へ揃える(X/Yは元々対称)
+  geometry.center();
+
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+// 指1本(Capsule)。ポーズ用ボーンは持たない固定の飾りで、親(手/足)に追従するだけ。
+function createDigitMesh(
+  radius: number,
+  length: number,
+  material: THREE.Material
+): THREE.Mesh {
+  const capsuleLength = Math.max(length - radius * 2, 0.004);
+  const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(radius, capsuleLength, 3, 6), material);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+// 手: 手のひらの球 + 4本指 + 親指。lowerArmの末端に固定し、関節は追加しない。
+// sign: 体の中心から見てどちら側の腕か(L=-1, R=+1)。親指は体の内側に付く。
+function createHandGroup(sign: 1 | -1, material: THREE.Material): THREE.Group {
+  const d = MANNEQUIN_DIMENSIONS;
+  const hand = new THREE.Group();
+  hand.name = 'handDecoration';
+
+  const palm = createJointSphere(d.handRadius, material);
+  hand.add(palm);
+
+  // 4本指: 手のひら下端からさらに下(-Y)へ、X方向に扇状に並べる
+  const fingerCount = FINGER_LENGTH_SCALES.length;
+  for (let i = 0; i < fingerCount; i += 1) {
+    // 内側(親指側)から順に長さ比率を適用する。内側は左手で+X、右手で-X
+    const scaleIndex = sign === 1 ? i : fingerCount - 1 - i;
+    const length = d.fingerLength * FINGER_LENGTH_SCALES[scaleIndex];
+    const finger = createDigitMesh(d.fingerRadius, length, material);
+    const offsetX = (i - (fingerCount - 1) / 2) * d.fingerGap;
+    finger.position.set(offsetX, -(d.handRadius + length / 2 - d.fingerRadius), 0);
+    hand.add(finger);
+  }
+
+  // 親指: 体の内側へ、少し外向きに傾けて付ける
+  const thumbSign = -sign;
+  const thumb = createDigitMesh(d.thumbRadius, d.thumbLength, material);
+  thumb.position.set(thumbSign * d.handRadius * 0.85, -d.handRadius * 0.55, 0);
+  thumb.rotation.z = thumbSign * d.thumbAngle;
+  hand.add(thumb);
+
+  return hand;
+}
+
+// 足指5本を足の甲メッシュへ追加する。関節は追加しない固定の飾り。
+// sign: L=-1, R=+1。親指(太い指)は体の内側に来る。
+function addToes(footMesh: THREE.Mesh, sign: 1 | -1, material: THREE.Material): void {
+  const d = MANNEQUIN_DIMENSIONS;
+  const toeCount = TOE_SCALES.length;
+
+  for (let i = 0; i < toeCount; i += 1) {
+    // iはX-側→X+側の並び。内側から順に太さ/長さ比率を適用する(内側は左足で+X、右足で-X)
+    const scaleIndex = sign === 1 ? i : toeCount - 1 - i;
+    const scale = TOE_SCALES[scaleIndex];
+    const radius = d.toeRadius * scale;
+    const length = d.toeLength * scale;
+
+    const toe = createDigitMesh(radius, length, material);
+    // Capsuleは+Y向きなのでX軸90°回転で前方(+Z)へ向ける
+    toe.rotation.x = Math.PI / 2;
+    const offsetX = (i - (toeCount - 1) / 2) * d.toeGap;
+    toe.position.set(
+      offsetX,
+      -d.footSize[1] / 2 + radius,
+      d.footSize[2] / 2 + length / 2 - radius
+    );
+    footMesh.add(toe);
+  }
 }
 
 function createLimbBone(
@@ -65,9 +201,7 @@ export function createMannequin(): MannequinModel {
   hips.position.set(0, hipHeight, 0);
   root.add(hips);
 
-  const pelvisMesh = new THREE.Mesh(new THREE.BoxGeometry(...d.pelvisSize), bodyMaterial);
-  pelvisMesh.castShadow = true;
-  pelvisMesh.receiveShadow = true;
+  const pelvisMesh = createPelvisMesh(bodyMaterial);
   hips.add(pelvisMesh);
 
   // Spine -> Chest -> Head
@@ -142,9 +276,9 @@ export function createMannequin(): MannequinModel {
     lowerArm.position.set(0, -d.upperArmLength, 0);
     upperArm.add(lowerArm);
 
-    const handMesh = createJointSphere(d.handRadius, bodyMaterial);
-    handMesh.position.set(0, -d.lowerArmLength, 0);
-    lowerArm.add(handMesh);
+    const hand = createHandGroup(sign, bodyMaterial);
+    hand.position.set(0, -d.lowerArmLength, 0);
+    lowerArm.add(hand);
   }
 
   // Legs
@@ -180,6 +314,7 @@ export function createMannequin(): MannequinModel {
     footMesh.position.set(0, -d.footSize[1] / 2, d.footSize[2] / 2 - d.legRadius);
     footMesh.castShadow = true;
     footMesh.receiveShadow = true;
+    addToes(footMesh, sign, bodyMaterial);
     foot.add(footMesh);
   }
 
