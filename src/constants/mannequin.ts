@@ -23,8 +23,8 @@ export const MANNEQUIN_DIMENSIONS = {
   jointRadius: 0.055,
   // 骨盤(丸みのある逆台形)。pelvisSizeはスパイン/脚付け根のオフセット計算に引き続き使用し、
   // 以下は見た目のメッシュ形状にのみ使う
-  pelvisTopWidth: 0.28,
-  pelvisBottomWidth: 0.16,
+  pelvisTopWidth: 0.32,
+  pelvisBottomWidth: 0.13,
   pelvisCornerRadius: 0.035,
   pelvisDepth: 0.1,
   pelvisBevel: 0.025,
