@@ -1,4 +1,5 @@
-const SERVICE_WORKER_URL = '/sw.js';
+// Viteのbase設定(GitHub Pagesのサブディレクトリ等)に追従してsw.jsを解決する
+const SERVICE_WORKER_URL = `${import.meta.env.BASE_URL}sw.js`;
 
 type UpdateHandler = () => void;
 
