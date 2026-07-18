@@ -106,5 +106,23 @@
       "立ち"
     ],
     "thumbnail": null
+  },
+  {
+    "id": "female_standing_pose2_001",
+    "name": "Female Standing Pose2",
+    "file": "female_standing_pose2_001.json",
+    "tags": [
+      "standing"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "female_standing_pose3_001",
+    "name": "Female Standing Pose3",
+    "file": "female_standing_pose3_001.json",
+    "tags": [
+      "standing"
+    ],
+    "thumbnail": null
   }
 ]

@@ -1,0 +1,107 @@
+{
+  "id": "female_standing_pose2_001",
+  "name": "Female Standing Pose2",
+  "tags": [
+    "standing"
+  ],
+  "bones": {
+    "hips": {
+      "rotation": [
+        -0.038,
+        -0.095,
+        -0.127
+      ]
+    },
+    "spine": {
+      "rotation": [
+        0.187,
+        0.025,
+        -0.021
+      ]
+    },
+    "chest": {
+      "rotation": [
+        -0.257,
+        -0.023,
+        0.192
+      ]
+    },
+    "head": {
+      "rotation": [
+        0.028,
+        0.051,
+        0.075
+      ]
+    },
+    "upperArm_L": {
+      "rotation": [
+        0.311,
+        0.044,
+        -0.244
+      ]
+    },
+    "lowerArm_L": {
+      "rotation": [
+        -0.348,
+        -0.03,
+        -0.006
+      ]
+    },
+    "upperArm_R": {
+      "rotation": [
+        0.075,
+        0.062,
+        0.685
+      ]
+    },
+    "lowerArm_R": {
+      "rotation": [
+        -0.239,
+        0.394,
+        -1.224
+      ]
+    },
+    "upperLeg_L": {
+      "rotation": [
+        -0.021,
+        0.069,
+        0.312
+      ]
+    },
+    "lowerLeg_L": {
+      "rotation": [
+        0.288,
+        0.264,
+        0.024
+      ]
+    },
+    "foot_L": {
+      "rotation": [
+        -0.035,
+        -0.052,
+        -0.308
+      ]
+    },
+    "upperLeg_R": {
+      "rotation": [
+        -0.422,
+        -0.368,
+        -0.093
+      ]
+    },
+    "lowerLeg_R": {
+      "rotation": [
+        0.943,
+        0.19,
+        -0.036
+      ]
+    },
+    "foot_R": {
+      "rotation": [
+        0.427,
+        0.161,
+        0.205
+      ]
+    }
+  }
+}
