@@ -1,0 +1,107 @@
+{
+  "id": "start_walking_001",
+  "name": "Start Walking 1",
+  "tags": [
+    "歩き"
+  ],
+  "bones": {
+    "hips": {
+      "rotation": [
+        -0.061,
+        -0.088,
+        -0.024
+      ]
+    },
+    "spine": {
+      "rotation": [
+        0.044,
+        0.009,
+        0.005
+      ]
+    },
+    "chest": {
+      "rotation": [
+        0.175,
+        0.036,
+        0.013
+      ]
+    },
+    "head": {
+      "rotation": [
+        -0.368,
+        0.005,
+        -0.014
+      ]
+    },
+    "upperArm_L": {
+      "rotation": [
+        -0.063,
+        0.033,
+        -0.279
+      ]
+    },
+    "lowerArm_L": {
+      "rotation": [
+        -0.443,
+        -0.105,
+        0.242
+      ]
+    },
+    "upperArm_R": {
+      "rotation": [
+        0.023,
+        0.067,
+        0.226
+      ]
+    },
+    "lowerArm_R": {
+      "rotation": [
+        -0.427,
+        0.084,
+        -0.255
+      ]
+    },
+    "upperLeg_L": {
+      "rotation": [
+        -0.022,
+        -0.126,
+        0.052
+      ]
+    },
+    "lowerLeg_L": {
+      "rotation": [
+        0.315,
+        -0.023,
+        0.017
+      ]
+    },
+    "foot_L": {
+      "rotation": [
+        -0.243,
+        -0.2,
+        -0.056
+      ]
+    },
+    "upperLeg_R": {
+      "rotation": [
+        -0.084,
+        0.193,
+        -0.1
+      ]
+    },
+    "lowerLeg_R": {
+      "rotation": [
+        0.298,
+        0.026,
+        -0.016
+      ]
+    },
+    "foot_R": {
+      "rotation": [
+        -0.196,
+        0.041,
+        0.157
+      ]
+    }
+  }
+}

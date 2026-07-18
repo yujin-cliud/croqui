@@ -1,0 +1,16 @@
+{
+  "id": "standing_one_leg_001",
+  "name": "立ちポーズ 004（片足立ち）",
+  "tags": ["立ち", "正面", "片足立ち"],
+  "bones": {
+    "upperLeg_R": {
+      "rotation": [-1.2, 0, 0]
+    },
+    "lowerLeg_R": {
+      "rotation": [1.6, 0, 0]
+    },
+    "foot_R": {
+      "rotation": [0.3, 0, 0]
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "id": "standing_arms_up_001",
+  "name": "立ちポーズ 003（腕上げ）",
+  "tags": ["立ち", "正面", "腕上げ"],
+  "bones": {
+    "upperArm_L": {
+      "rotation": [0, 0, 2.4]
+    },
+    "lowerArm_L": {
+      "rotation": [0.3, 0, 0]
+    },
+    "upperArm_R": {
+      "rotation": [0, 0, -2.4]
+    },
+    "lowerArm_R": {
+      "rotation": [0.3, 0, 0]
+    }
+  }
+}

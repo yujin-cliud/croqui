@@ -1,0 +1,110 @@
+[
+  {
+    "id": "standing_001",
+    "name": "立ちポーズ 001",
+    "file": "standing_001.json",
+    "tags": [
+      "立ち",
+      "正面"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "standing_back_001",
+    "name": "立ちポーズ 002（後ろ姿）",
+    "file": "standing_back_001.json",
+    "tags": [
+      "立ち",
+      "後ろ姿"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "standing_arms_up_001",
+    "name": "立ちポーズ 003（腕上げ）",
+    "file": "standing_arms_up_001.json",
+    "tags": [
+      "立ち",
+      "正面",
+      "腕上げ"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "standing_one_leg_001",
+    "name": "立ちポーズ 004（片足立ち）",
+    "file": "standing_one_leg_001.json",
+    "tags": [
+      "立ち",
+      "正面",
+      "片足立ち"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "sitting_001",
+    "name": "座りポーズ 001",
+    "file": "sitting_001.json",
+    "tags": [
+      "座り",
+      "正面"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "standing_side_001",
+    "name": "立ちポーズ 005（横向き）",
+    "file": "standing_side_001.json",
+    "tags": [
+      "立ち",
+      "横向き"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "lying_001",
+    "name": "寝ポーズ 001",
+    "file": "lying_001.json",
+    "tags": [
+      "寝る",
+      "正面"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "start_walking_001",
+    "name": "Start Walking 1",
+    "file": "start_walking_001.json",
+    "tags": [
+      "歩き"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "start_walking_002",
+    "name": "Start Walking 2",
+    "file": "start_walking_002.json",
+    "tags": [
+      "歩き"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "start_walking_003",
+    "name": "Start Walking 3",
+    "file": "start_walking_003.json",
+    "tags": [
+      "歩き"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "idle_001",
+    "name": "Idle",
+    "file": "idle_001.json",
+    "tags": [
+      "立ち"
+    ],
+    "thumbnail": null
+  }
+]

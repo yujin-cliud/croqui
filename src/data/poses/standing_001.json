@@ -1,0 +1,16 @@
+{
+  "id": "standing_001",
+  "name": "立ちポーズ 001",
+  "tags": ["立ち", "正面"],
+  "bones": {
+    "hips": {
+      "rotation": [0, 0, 0]
+    },
+    "spine": {
+      "rotation": [0, 0, 0]
+    },
+    "head": {
+      "rotation": [0, 0, 0]
+    }
+  }
+}

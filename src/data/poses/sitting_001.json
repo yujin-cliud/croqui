@@ -1,0 +1,22 @@
+{
+  "id": "sitting_001",
+  "name": "座りポーズ 001",
+  "tags": ["座り", "正面"],
+  "bones": {
+    "spine": {
+      "rotation": [0.15, 0, 0]
+    },
+    "upperLeg_L": {
+      "rotation": [-1.5, 0, 0.1]
+    },
+    "lowerLeg_L": {
+      "rotation": [1.5, 0, 0]
+    },
+    "upperLeg_R": {
+      "rotation": [-1.5, 0, -0.1]
+    },
+    "lowerLeg_R": {
+      "rotation": [1.5, 0, 0]
+    }
+  }
+}

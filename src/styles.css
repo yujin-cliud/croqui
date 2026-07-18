@@ -1,0 +1,387 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #111;
+  background: #fff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  overscroll-behavior: none;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Layout: docs/04_UI_UX.md */
+.home-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.app-header {
+  height: 56px;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-bottom: 1px solid #ddd;
+}
+
+.app-title {
+  font-size: 1.1rem;
+}
+
+.header-settings-button {
+  margin-left: auto;
+  padding: 8px 14px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+}
+
+/* Workspace: 3Dビューア + 描画キャンバスの左右2分割(docs/04) */
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 2fr 3fr; /* PC: 左(3D)40% : 右(描画)60% */
+}
+
+.viewer-area {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.drawing-area {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid #ddd;
+  background: #fff;
+}
+
+.drawing-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.drawing-toolbar button {
+  padding: 6px 14px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.drawing-toolbar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.drawing-canvas-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.drawing-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none; /* タッチ描画中のスクロールを防ぐ */
+  cursor: crosshair;
+}
+
+/* 狭い画面: 上下配置(3Dが上、描画が下)。描画スペースが極端に
+   小さくならないよう、描画側へ過半を割り当てる(docs/04) */
+@media (max-width: 800px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 45%) minmax(0, 55%);
+  }
+
+  .drawing-area {
+    border-left: none;
+    border-top: 1px solid #ddd;
+  }
+}
+
+.viewer-area canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.viewer-overlay-top {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.viewer-overlay-top > * {
+  pointer-events: auto;
+}
+
+.viewer-status-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.85);
+  text-align: center;
+  padding: 16px;
+}
+
+/* Timer widget */
+.timer-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
+}
+
+.timer-widget-time {
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.timer-widget-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.timer-widget-actions button {
+  padding: 4px 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 0.85rem;
+}
+
+/* Control panel */
+.control-panel {
+  border-top: 1px solid #ddd;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-panel-info {
+  text-align: center;
+  font-size: 0.9rem;
+  color: #444;
+  min-height: 1.2em;
+}
+
+.control-panel-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.control-panel-buttons button {
+  padding: 12px 8px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.control-panel-buttons button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.control-button-active {
+  background: #fff3d6 !important;
+  border-color: #e0b03c !important;
+}
+
+/* Modal-style panels (Settings / Tag Search) */
+.panel-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 20;
+}
+
+@media (min-width: 640px) {
+  .panel-overlay {
+    align-items: center;
+  }
+}
+
+.panel {
+  background: #fff;
+  width: 100%;
+  max-width: 420px;
+  max-height: 80vh;
+  overflow-y: auto;
+  border-radius: 12px 12px 0 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@media (min-width: 640px) {
+  .panel {
+    border-radius: 12px;
+  }
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-header button {
+  border: none;
+  background: none;
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.tag-category {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.tag-category legend {
+  padding: 0 4px;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  font-size: 0.9rem;
+}
+
+.panel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.panel-footer button {
+  padding: 6px 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.settings-group {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.settings-group legend {
+  padding: 0 4px;
+  font-size: 0.85rem;
+  color: #666;
+  width: 100%;
+}
+
+.settings-radio,
+.settings-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+
+.settings-group input[type='number'] {
+  width: 90px;
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+/* Error boundary / update notice */
+.error-boundary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  min-height: 120px;
+}
+
+.error-boundary button {
+  padding: 8px 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.update-notice {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #222;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.update-notice button {
+  padding: 4px 10px;
+  border: 1px solid #fff;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+}

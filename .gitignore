@@ -1,0 +1,31 @@
+# 依存・ビルド成果物
+node_modules/
+dist/
+.vite/
+
+# 環境変数(サンプルは除外しない)
+.env
+.env.*
+!.env.example
+*.local
+
+# OS固有ファイル
+.DS_Store
+Thumbs.db
+
+# エディタ設定
+.vscode/
+.idea/
+
+# ログ
+*.log
+
+# TypeScriptビルドキャッシュ
+tsconfig.tsbuildinfo
+
+# Mixamoの元FBX素材(再配布可否が未確認のためリポジトリに含めない。
+# 変換済みのポーズJSON(src/data/poses/)は含める)
+tools/import-mixamo/mixamo-src/
+
+# ポーズ検証ツールの一時出力
+tools/import-mixamo/check_*.svg

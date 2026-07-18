@@ -1,0 +1,16 @@
+{
+  "id": "lying_001",
+  "name": "寝ポーズ 001",
+  "tags": ["寝る", "正面"],
+  "bones": {
+    "hips": {
+      "rotation": [-1.5708, 0, 0]
+    },
+    "upperLeg_L": {
+      "rotation": [0.2, 0, 0.05]
+    },
+    "upperLeg_R": {
+      "rotation": [0.2, 0, -0.05]
+    }
+  }
+}
