@@ -159,6 +159,14 @@ button {
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
+  /* ドラッグ移動用: タッチでもドラッグできるようにし、掴める見た目にする */
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.timer-widget:active {
+  cursor: grabbing;
 }
 
 .timer-widget-time {
