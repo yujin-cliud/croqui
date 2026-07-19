@@ -124,29 +124,85 @@ function createDigitMesh(
 // sign: 体の中心から見てどちら側の腕か(L=-1, R=+1)。親指は体の内側に付く。
 function createHandGroup(sign: 1 | -1, material: THREE.Material): THREE.Group {
   const d = MANNEQUIN_DIMENSIONS;
+
   const hand = new THREE.Group();
   hand.name = 'handDecoration';
 
-  const palm = createJointSphere(d.handRadius, material);
+  // 手のひらのサイズ
+  const palmWidth = d.handRadius * 1.6;
+  const palmHeight = d.handRadius * 1.8;
+  const palmDepth = d.handRadius * 0.55;
+
+  // 薄い四角形の手のひら
+  const palm = new THREE.Mesh(
+    new THREE.BoxGeometry(
+      palmWidth,
+      palmHeight,
+      palmDepth
+    ),
+    material
+  );
+
+  // 手首を原点として、手のひら全体を下側へ配置
+  palm.position.set(
+    0,
+    -palmHeight / 2,
+    0
+  );
+
+  palm.castShadow = true;
+  palm.receiveShadow = true;
   hand.add(palm);
 
-  // 4本指: 手のひら下端からさらに下(-Y)へ、X方向に扇状に並べる
+  // 4本指
   const fingerCount = FINGER_LENGTH_SCALES.length;
+
   for (let i = 0; i < fingerCount; i += 1) {
-    // 内側(親指側)から順に長さ比率を適用する。内側は左手で+X、右手で-X
-    const scaleIndex = sign === 1 ? i : fingerCount - 1 - i;
-    const length = d.fingerLength * FINGER_LENGTH_SCALES[scaleIndex];
-    const finger = createDigitMesh(d.fingerRadius, length, material);
-    const offsetX = (i - (fingerCount - 1) / 2) * d.fingerGap;
-    finger.position.set(offsetX, -(d.handRadius + length / 2 - d.fingerRadius), 0);
+    const scaleIndex =
+      sign === 1
+        ? i
+        : fingerCount - 1 - i;
+
+    const length =
+      d.fingerLength * FINGER_LENGTH_SCALES[scaleIndex];
+
+    const finger = createDigitMesh(
+      d.fingerRadius,
+      length,
+      material
+    );
+
+    const offsetX =
+      (i - (fingerCount - 1) / 2) * d.fingerGap;
+
+    // 手のひらの下端から指を伸ばす
+    finger.position.set(
+      offsetX,
+      -palmHeight - length / 2,
+      0
+    );
+
     hand.add(finger);
   }
 
-  // 親指: 体の内側へ、少し外向きに傾けて付ける
+  // 親指
   const thumbSign = -sign;
-  const thumb = createDigitMesh(d.thumbRadius, d.thumbLength, material);
-  thumb.position.set(thumbSign * d.handRadius * 0.85, -d.handRadius * 0.55, 0);
-  thumb.rotation.z = thumbSign * d.thumbAngle;
+
+  const thumb = createDigitMesh(
+    d.thumbRadius,
+    d.thumbLength,
+    material
+  );
+
+  thumb.position.set(
+    thumbSign * palmWidth * 0.6,
+    -palmHeight * 0.55,
+    0
+  );
+
+  thumb.rotation.z =
+    thumbSign * d.thumbAngle;
+
   hand.add(thumb);
 
   return hand;
@@ -238,7 +294,7 @@ export function createMannequin(): MannequinModel {
 
   // 腰の球: 胸と骨盤の間のくびれ部分。スパイン関節に追従して曲がる
   const spineMesh = createJointSphere(d.waistRadius, bodyMaterial);
-  spineMesh.position.y = d.spineLength / 2;
+  spineMesh.position.y = d.spineLength * 0.45;
   spine.add(spineMesh);
 
   const chest = new THREE.Group();
@@ -287,8 +343,11 @@ export function createMannequin(): MannequinModel {
   ];
 
   for (const { side, sign } of sides) {
-    const shoulderPosition = new THREE.Vector3((d.shoulderWidth / 2) * sign, d.chestSize[1] * 0.85, 0);
-
+    const shoulderPosition = new THREE.Vector3(
+  (d.shoulderWidth / 2 + d.jointRadius * 0.7) * sign,
+  d.chestSize[1] * 0.85,
+  0
+);
     const shoulderJoint = createJointSphere(d.jointRadius, jointMaterial);
     shoulderJoint.position.copy(shoulderPosition);
     chest.add(shoulderJoint);
@@ -314,7 +373,11 @@ export function createMannequin(): MannequinModel {
 
   // Legs
   for (const { side, sign } of sides) {
-    const hipJointPosition = new THREE.Vector3((d.hipWidth / 2) * sign, -d.pelvisSize[1] / 2, 0);
+    const hipJointPosition = new THREE.Vector3(
+  (d.hipWidth / 2 + d.jointRadius * 0.8) * sign,
+  -d.pelvisSize[1] / 2,
+  0
+);
 
     const hipJoint = createJointSphere(d.jointRadius, jointMaterial);
     hipJoint.position.copy(hipJointPosition);
@@ -325,7 +388,7 @@ export function createMannequin(): MannequinModel {
     upperLeg.position.copy(hipJointPosition);
     hips.add(upperLeg);
 
-    const kneeJoint = createJointSphere(d.jointRadius * 0.9, jointMaterial);
+    const kneeJoint = createJointSphere(d.jointRadius * 1.2, jointMaterial);
     kneeJoint.position.set(0, -d.upperLegLength, 0);
     upperLeg.add(kneeJoint);
 
