@@ -51,13 +51,19 @@ function createRoundedPolygonShape(points: THREE.Vector2[], cornerRadius: number
   return shape;
 }
 
-// 骨盤: 上辺が広く下へ向かって細くなる、丸みのある逆台形の立体。
-// 原点は従来のBoxGeometry同様に中心のまま(既存ポーズやオフセット計算に影響しない)。
-function createPelvisMesh(material: THREE.Material): THREE.Mesh {
-  const d = MANNEQUIN_DIMENSIONS;
-  const halfTop = d.pelvisTopWidth / 2;
-  const halfBottom = d.pelvisBottomWidth / 2;
-  const halfHeight = d.pelvisSize[1] / 2;
+// 上下で幅の異なる、角を丸めた台形ブロックのジオメトリを作る(中心が原点)。
+// 骨盤(逆三角形)と胸(下すぼまりの台形)の両方で使う。
+function createTaperedBlockGeometry(options: {
+  topWidth: number;
+  bottomWidth: number;
+  height: number;
+  depth: number;
+  bevel: number;
+  cornerRadius: number;
+}): THREE.ExtrudeGeometry {
+  const halfTop = options.topWidth / 2;
+  const halfBottom = options.bottomWidth / 2;
+  const halfHeight = options.height / 2;
 
   // 反時計回り: 右上 → 左上 → 左下 → 右下
   const outline = [
@@ -66,20 +72,36 @@ function createPelvisMesh(material: THREE.Material): THREE.Mesh {
     new THREE.Vector2(-halfBottom, -halfHeight),
     new THREE.Vector2(halfBottom, -halfHeight),
   ];
-  const shape = createRoundedPolygonShape(outline, d.pelvisCornerRadius);
+  const shape = createRoundedPolygonShape(outline, options.cornerRadius);
 
   const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: d.pelvisDepth,
+    depth: options.depth,
     bevelEnabled: true,
-    bevelThickness: d.pelvisBevel,
-    bevelSize: d.pelvisBevel,
+    bevelThickness: options.bevel,
+    bevelSize: options.bevel,
     bevelSegments: 3,
     curveSegments: 8,
   });
   // 押し出しはZ+方向へ伸びるため、中心を原点へ揃える(X/Yは元々対称)
   geometry.center();
+  return geometry;
+}
+
+// 骨盤: 上辺が広く下へ向かって細くなる、丸みのある逆三角形の立体。
+// グループの原点・回転軸は従来のまま(メッシュのみ僅かに下へオフセット)。
+function createPelvisMesh(material: THREE.Material): THREE.Mesh {
+  const d = MANNEQUIN_DIMENSIONS;
+  const geometry = createTaperedBlockGeometry({
+    topWidth: d.pelvisTopWidth,
+    bottomWidth: d.pelvisBottomWidth,
+    height: d.pelvisSize[1],
+    depth: d.pelvisDepth,
+    bevel: d.pelvisBevel,
+    cornerRadius: d.pelvisCornerRadius,
+  });
 
   const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.y = d.pelvisOffsetY;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
@@ -166,8 +188,11 @@ function createLimbBone(
   bone.name = boneName;
   bone.userData.bone = boneName;
 
-  const capsuleLength = Math.max(length - radius * 2, 0.02);
-  const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(radius, capsuleLength, 4, 8), material);
+  // 付け根側が太く末端側が細い、先細りの円柱。両端の関節球やパーツが継ぎ目を隠す
+  const mesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius * MANNEQUIN_DIMENSIONS.limbTaperRatio, length, 10),
+    material
+  );
   mesh.position.y = -length / 2;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -211,13 +236,9 @@ export function createMannequin(): MannequinModel {
   spine.position.set(0, d.pelvisSize[1] / 2, 0);
   hips.add(spine);
 
-  const spineMesh = new THREE.Mesh(
-    new THREE.CapsuleGeometry(d.spineRadius, Math.max(d.spineLength - d.spineRadius * 2, 0.02), 4, 8),
-    bodyMaterial
-  );
+  // 腰の球: 胸と骨盤の間のくびれ部分。スパイン関節に追従して曲がる
+  const spineMesh = createJointSphere(d.waistRadius, bodyMaterial);
   spineMesh.position.y = d.spineLength / 2;
-  spineMesh.castShadow = true;
-  spineMesh.receiveShadow = true;
   spine.add(spineMesh);
 
   const chest = new THREE.Group();
@@ -226,7 +247,17 @@ export function createMannequin(): MannequinModel {
   chest.position.set(0, d.spineLength, 0);
   spine.add(chest);
 
-  const chestMesh = new THREE.Mesh(new THREE.BoxGeometry(...d.chestSize), bodyMaterial);
+  const chestMesh = new THREE.Mesh(
+    createTaperedBlockGeometry({
+      topWidth: d.chestTopWidth,
+      bottomWidth: d.chestBottomWidth,
+      height: d.chestSize[1],
+      depth: d.chestDepth,
+      bevel: d.chestBevel,
+      cornerRadius: d.chestCornerRadius,
+    }),
+    bodyMaterial
+  );
   chestMesh.position.y = d.chestSize[1] / 2;
   chestMesh.castShadow = true;
   chestMesh.receiveShadow = true;
