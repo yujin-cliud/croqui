@@ -217,7 +217,7 @@ export function createMannequin(): MannequinModel {
   const root = new THREE.Group();
   root.name = 'mannequinRoot';
 
-  const hipHeight = d.footHeight + d.lowerLegLength + d.upperLegLength;
+  const hipHeight = d.footHeight + d.lowerLegLength + d.upperLegLength + d.pelvisSize[1] / 2;
 
   // Hips: ルートボーン（骨盤）。カメラの注視点もここを基準にする。
   const hips = new THREE.Group();
