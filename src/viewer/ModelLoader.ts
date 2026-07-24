@@ -164,29 +164,123 @@ function createHandGroup(sign: 1 | -1, material: THREE.Material): THREE.Group {
         : fingerCount - 1 - i;
 
     const length =
-      d.fingerLength * FINGER_LENGTH_SCALES[scaleIndex];
-
-    const finger = createDigitMesh(
-      d.fingerRadius,
-      length,
-      material
-    );
+  d.fingerLength *
+  FINGER_LENGTH_SCALES[scaleIndex] *
+  1.5;
 
     const offsetX =
-      (i - (fingerCount - 1) / 2) * d.fingerGap;
+  (i - (fingerCount - 1) / 2) * d.fingerGap;
 
-    // 手のひらの下端から指を伸ばす
-    finger.position.set(
-      offsetX,
-      -palmHeight - length / 2,
-      0
-    );
+// 指全体をまとめるグループ
+const fingerGroup = new THREE.Group();
 
-    hand.add(finger);
+fingerGroup.position.set(
+  offsetX,
+  -palmHeight,
+  0
+);
+
+// 指を3つの節に分ける
+const segmentCount = 3;
+
+// 隙間はほぼ見えない程度
+const segmentGap = d.fingerRadius * 0.15;
+
+// 根元・中間・先端の長さ比率
+const segmentLengthScales = [
+  1.0,  // 根元：一番長い
+  0.78, // 中間：少し短い
+  0.58, // 先端：一番短い
+];
+
+// 隙間を除いた、3節に使える長さ
+const availableLength =
+  length - segmentGap * (segmentCount - 1);
+
+// 比率の合計
+const totalScale =
+  segmentLengthScales.reduce((sum, scale) => sum + scale, 0);
+
+let currentY = 0;
+
+for (let segmentIndex = 0; segmentIndex < segmentCount; segmentIndex += 1) {
+  const segmentLength =
+    availableLength *
+    (segmentLengthScales[segmentIndex] / totalScale);
+
+  const segment = new THREE.Mesh(
+    new THREE.CylinderGeometry(
+      d.fingerRadius * 0.85,
+      d.fingerRadius * 0.75,
+      segmentLength,
+      8
+    ),
+    material
+  );
+
+  segment.position.set(
+    0,
+    currentY - segmentLength / 2,
+    0
+  );
+
+  segment.castShadow = true;
+  segment.receiveShadow = true;
+
+  fingerGroup.add(segment);
+
+  currentY -= segmentLength + segmentGap;
+}
+
+  
+
+hand.add(fingerGroup);
   }
 
   // 親指
   const thumbSign = -sign;
+  // 親指の付け根を三角形の立体で表現
+const thumbBaseShape = new THREE.Shape();
+
+thumbBaseShape.moveTo(0, 0);
+thumbBaseShape.lineTo(
+  thumbSign * palmWidth * 0.42,
+  -palmHeight * 0.18
+);
+thumbBaseShape.lineTo(
+  thumbSign * palmWidth * 0.50,
+  -palmHeight * 0.62
+);
+thumbBaseShape.closePath();
+
+const thumbBaseGeometry = new THREE.ExtrudeGeometry(
+  thumbBaseShape,
+  {
+    depth: palmDepth * 0.75,
+    bevelEnabled: true,
+    bevelThickness: d.thumbRadius * 0.18,
+    bevelSize: d.thumbRadius * 0.12,
+    bevelSegments: 2,
+  }
+);
+
+thumbBaseGeometry.center();
+
+const thumbBaseMesh = new THREE.Mesh(
+  thumbBaseGeometry,
+  material
+);
+
+thumbBaseMesh.position.set(
+  thumbSign * palmWidth * 0.51,
+  -palmHeight * 0.4,
+  0
+);
+thumbBaseMesh.rotation.z = thumbSign * -0.6;
+thumbBaseMesh.castShadow = true;
+thumbBaseMesh.receiveShadow = true;
+
+hand.add(thumbBaseMesh);
 
   const thumb = createDigitMesh(
     d.thumbRadius,
@@ -195,8 +289,8 @@ function createHandGroup(sign: 1 | -1, material: THREE.Material): THREE.Group {
   );
 
   thumb.position.set(
-    thumbSign * palmWidth * 0.6,
-    -palmHeight * 0.55,
+    thumbSign * palmWidth * 0.8,
+    -palmHeight * 0.75,
     0
   );
 
@@ -238,18 +332,33 @@ function createLimbBone(
   boneName: BoneName,
   length: number,
   radius: number,
-  material: THREE.Material
+  material: THREE.Material,
+  startGap = 0,
+  endGap = 0
 ): THREE.Group {
   const bone = new THREE.Group();
   bone.name = boneName;
   bone.userData.bone = boneName;
 
-  // 付け根側が太く末端側が細い、先細りの円柱。両端の関節球やパーツが継ぎ目を隠す
+  // 関節の丸がある側だけ棒を短くする
+  const meshLength = Math.max(
+    length - startGap - endGap,
+    0.01
+  );
+
   const mesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius, radius * MANNEQUIN_DIMENSIONS.limbTaperRatio, length, 10),
+    new THREE.CylinderGeometry(
+      radius,
+      radius * MANNEQUIN_DIMENSIONS.limbTaperRatio,
+      meshLength,
+      10
+    ),
     material
   );
-  mesh.position.y = -length / 2;
+
+  // 棒の開始位置を付け根側の隙間ぶん下げる
+  mesh.position.y = -(startGap + meshLength / 2);
+
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   bone.add(mesh);
@@ -348,27 +457,56 @@ export function createMannequin(): MannequinModel {
   d.chestSize[1] * 0.85,
   0
 );
-    const shoulderJoint = createJointSphere(d.jointRadius, jointMaterial);
+    const shoulderJoint = createJointSphere(
+  d.jointRadius,
+  jointMaterial
+);
     shoulderJoint.position.copy(shoulderPosition);
     chest.add(shoulderJoint);
 
     const upperArmName = `upperArm_${side}` as BoneName;
-    const upperArm = createLimbBone(upperArmName, d.upperArmLength, d.armRadius, bodyMaterial);
+    const upperArm = createLimbBone(
+  upperArmName,
+  d.upperArmLength,
+  d.armRadius,
+  bodyMaterial,
+  d.jointRadius * 1.0,
+  d.jointRadius * 1.0
+);
     upperArm.position.copy(shoulderPosition);
     chest.add(upperArm);
 
-    const elbowJoint = createJointSphere(d.jointRadius * 0.85, jointMaterial);
+    const elbowJoint = createJointSphere(
+  d.jointRadius,
+  jointMaterial
+);
     elbowJoint.position.set(0, -d.upperArmLength, 0);
     upperArm.add(elbowJoint);
 
     const lowerArmName = `lowerArm_${side}` as BoneName;
-    const lowerArm = createLimbBone(lowerArmName, d.lowerArmLength, d.armRadius * 0.85, bodyMaterial);
+    const lowerArm = createLimbBone(
+  lowerArmName,
+  d.lowerArmLength,
+  d.armRadius * 0.9,
+  bodyMaterial,
+  d.jointRadius * 1.0,
+  0
+);
     lowerArm.position.set(0, -d.upperArmLength, 0);
     upperArm.add(lowerArm);
 
     const hand = createHandGroup(sign, bodyMaterial);
-    hand.position.set(0, -d.lowerArmLength, 0);
-    lowerArm.add(hand);
+
+hand.position.set(
+  0,
+  -d.lowerArmLength,
+  0
+);
+
+// 左右それぞれ反対方向へ90度回転し、親指を手前へ向ける
+hand.rotation.y = sign * (Math.PI / 2);
+
+lowerArm.add(hand);
   }
 
   // Legs
@@ -379,21 +517,41 @@ export function createMannequin(): MannequinModel {
   0
 );
 
-    const hipJoint = createJointSphere(d.jointRadius, jointMaterial);
+    const hipJoint = createJointSphere(
+  d.jointRadius,
+  jointMaterial
+);
     hipJoint.position.copy(hipJointPosition);
     hips.add(hipJoint);
 
     const upperLegName = `upperLeg_${side}` as BoneName;
-    const upperLeg = createLimbBone(upperLegName, d.upperLegLength, d.legRadius, bodyMaterial);
+    const upperLeg = createLimbBone(
+  upperLegName,
+  d.upperLegLength,
+  d.legRadius,
+  bodyMaterial,
+  d.jointRadius * 1.1,
+  d.jointRadius * 1.1
+);
     upperLeg.position.copy(hipJointPosition);
     hips.add(upperLeg);
 
-    const kneeJoint = createJointSphere(d.jointRadius * 1.2, jointMaterial);
+    const kneeJoint = createJointSphere(
+  d.jointRadius,
+  jointMaterial
+);
     kneeJoint.position.set(0, -d.upperLegLength, 0);
     upperLeg.add(kneeJoint);
 
     const lowerLegName = `lowerLeg_${side}` as BoneName;
-    const lowerLeg = createLimbBone(lowerLegName, d.lowerLegLength, d.legRadius * 0.85, bodyMaterial);
+    const lowerLeg = createLimbBone(
+  lowerLegName,
+  d.lowerLegLength,
+  d.legRadius * 0.85,
+  bodyMaterial,
+  d.jointRadius * 1.1,
+  0
+);
     lowerLeg.position.set(0, -d.upperLegLength, 0);
     upperLeg.add(lowerLeg);
 

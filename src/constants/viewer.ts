@@ -30,7 +30,7 @@ export const VIEWER_CAMERA = {
 // 目標距離へ毎フレーム補間して滑らかに寄る/引く
 export const VIEWER_WHEEL_ZOOM = {
   // 1ノッチあたりの距離倍率。0.987 = 約1.3%ずつ(従来5%の約26%)
-  perNotchScale: 0.987,
+  perNotchScale: 0.950,
   // ブラウザ標準(deltaMode=pixel)で1ノッチ相当のdeltaY
   wheelDeltaPerNotch: 100,
   // 1イベントで進める最大ノッチ数(高速ホイールや慣性スクロールの暴走防止)
