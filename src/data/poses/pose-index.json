@@ -124,5 +124,14 @@
       "standing"
     ],
     "thumbnail": null
+  },
+  {
+    "id": "walking_left_turn_001",
+    "name": "Walking Left Turn",
+    "file": "walking_left_turn_001.json",
+    "tags": [
+      "Walking"
+    ],
+    "thumbnail": null
   }
 ]
