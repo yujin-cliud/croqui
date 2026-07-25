@@ -15,29 +15,33 @@ export const MANNEQUIN_DIMENSIONS = {
   shoulderWidth: 0.34,
   neckLength: 0.06,
   headRadius: 0.11,
-  armRadius: 0.05,
+  armRadius: 0.058,
   upperArmLength: 0.26,
   lowerArmLength: 0.24,
   handRadius: 0.055,
   footSize: [0.09, 0.06, 0.22] as const,
-  jointRadius: 0.055,
+  jointRadius: 0.038,
   // 骨盤(逆三角形)。pelvisSizeはスパイン/脚付け根のオフセット計算に引き続き使用し、
   // 以下は見た目のメッシュ形状にのみ使う
-  pelvisTopWidth: 0.3,
-  pelvisBottomWidth: 0.06,
+  pelvisTopWidth: 0.22,
+  pelvisBottomWidth: 0.30,
   pelvisCornerRadius: 0.02,
   pelvisDepth: 0.07,
-  pelvisBevel: 0.015,
+  pelvisBevel: 0.018,
   // 骨盤メッシュを少し下げ、股関節の球が三角形の上角の横に見えるようにする
   pelvisOffsetY: -0.02,
   // 胸(上が広く下がすぼまる台形ブロック)
-  chestTopWidth: 0.34,
+  chestTopWidth: 0.28,
   chestBottomWidth: 0.2,
-  chestCornerRadius: 0.03,
+  chestCornerRadius: 0.02,
   chestDepth: 0.1,
-  chestBevel: 0.02,
+  chestBevel: 0.018,
   // 腰の球(胸と骨盤の間のくびれ部分)
   waistRadius: 0.085,
+  bellyWidth: 0.17,
+  bellyHeight: 0.10,
+  bellyDepth: 0.075,
+  bellyBevel: 0.025,
   // 手足の先細り: 末端側の半径 = 基本半径 × この比率
   limbTaperRatio: 0.72,
   // 手の指(ポーズ用ボーンなし・手に固定の飾り)

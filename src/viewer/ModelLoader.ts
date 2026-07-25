@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MANNEQUIN_DIMENSIONS, MANNEQUIN_COLOR, MANNEQUIN_JOINT_COLOR, FINGER_LENGTH_SCALES, TOE_SCALES } from '../constants/mannequin';
+import { MANNEQUIN_DIMENSIONS, MANNEQUIN_COLOR, MANNEQUIN_JOINT_COLOR, TOE_SCALES } from '../constants/mannequin';
 import type { BoneName } from '../types/Pose';
 
 export type MannequinModel = {
@@ -19,7 +19,38 @@ function createJointSphere(radius: number, material: THREE.Material): THREE.Mesh
   mesh.receiveShadow = true;
   return mesh;
 }
+// お腹(腰): 面取りした長方形ブロック
+function createBellyMesh(material: THREE.Material): THREE.Mesh {
+  const d = MANNEQUIN_DIMENSIONS;
+  const halfW = d.bellyWidth / 2;
+  const halfH = d.bellyHeight / 2;
 
+  const outline = [
+  new THREE.Vector2( halfW,  halfH),
+  new THREE.Vector2(-halfW,  halfH),
+  new THREE.Vector2(-halfW, -halfH),
+  new THREE.Vector2( halfW, -halfH),
+];
+
+const shape = createRoundedPolygonShape(
+  outline,
+  d.bellyHeight * 0.22
+);
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: d.bellyDepth,
+    bevelEnabled: true,
+    bevelThickness: d.bellyBevel,
+    bevelSize: d.bellyBevel,
+    bevelSegments: 3,
+    curveSegments: 4,
+  });
+  geometry.center();
+
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
 // 角を丸めた多角形のShapeを作る(頂点列は反時計回り)。各角は隣接辺方向へ
 // cornerRadiusぶん手前から曲線でつなぐことで、木製マネキンらしい丸みを出す。
 function createRoundedPolygonShape(points: THREE.Vector2[], cornerRadius: number): THREE.Shape {
@@ -72,11 +103,23 @@ function createTaperedBlockGeometry(options: {
     new THREE.Vector2(-halfBottom, -halfHeight),
     new THREE.Vector2(halfBottom, -halfHeight),
   ];
-  const shape = createRoundedPolygonShape(outline, options.cornerRadius);
+  // 丸みが0なら純粋な4角形（直線のみ）にして、余分な角の分割を防ぐ。
+  // 丸みがある場合だけ角を曲線でつなぐ。
+  let shape: THREE.Shape;
+  if (options.cornerRadius <= 0) {
+    shape = new THREE.Shape();
+    shape.moveTo(outline[0].x, outline[0].y);
+    for (let i = 1; i < outline.length; i += 1) {
+      shape.lineTo(outline[i].x, outline[i].y);
+    }
+    shape.closePath();
+  } else {
+    shape = createRoundedPolygonShape(outline, options.cornerRadius);
+  }
 
   const geometry = new THREE.ExtrudeGeometry(shape, {
     depth: options.depth,
-    bevelEnabled: true,
+    bevelEnabled: options.bevel > 0,
     bevelThickness: options.bevel,
     bevelSize: options.bevel,
     bevelSegments: 3,
@@ -91,22 +134,276 @@ function createTaperedBlockGeometry(options: {
 // グループの原点・回転軸は従来のまま(メッシュのみ僅かに下へオフセット)。
 function createPelvisMesh(material: THREE.Material): THREE.Mesh {
   const d = MANNEQUIN_DIMENSIONS;
-  const geometry = createTaperedBlockGeometry({
-    topWidth: d.pelvisTopWidth,
-    bottomWidth: d.pelvisBottomWidth,
-    height: d.pelvisSize[1],
+
+  const halfHeight = d.pelvisSize[1] / 2;
+  const halfTop = d.pelvisTopWidth / 2;
+  const halfBottom = d.pelvisBottomWidth / 2;
+
+  const cornerRadius = d.pelvisCornerRadius;
+  const bottomCurveDepth = d.pelvisSize[1] * 0.35;
+
+  // 台形の4頂点
+  const topLeft = new THREE.Vector2(-halfTop, halfHeight);
+  const topRight = new THREE.Vector2(halfTop, halfHeight);
+  const bottomRight = new THREE.Vector2(halfBottom, -halfHeight);
+  const bottomLeft = new THREE.Vector2(-halfBottom, -halfHeight);
+
+  // 下のお椀カーブの制御点
+  const bottomControl = new THREE.Vector2(
+    0,
+    -halfHeight - bottomCurveDepth
+  );
+
+  // 頂点から隣の点へ、指定距離だけ進んだ位置を求める
+  const moveToward = (
+    from: THREE.Vector2,
+    to: THREE.Vector2,
+    distance: number
+  ): THREE.Vector2 => {
+    const direction = to.clone().sub(from);
+    const safeDistance = Math.min(distance, direction.length() * 0.45);
+
+    return from
+      .clone()
+      .add(direction.normalize().multiplyScalar(safeDistance));
+  };
+
+  // 下のお椀カーブ上の座標
+  const bottomCurvePoint = (t: number): THREE.Vector2 => {
+    const oneMinusT = 1 - t;
+
+    return new THREE.Vector2(
+      oneMinusT * oneMinusT * bottomRight.x
+        + 2 * oneMinusT * t * bottomControl.x
+        + t * t * bottomLeft.x,
+
+      oneMinusT * oneMinusT * bottomRight.y
+        + 2 * oneMinusT * t * bottomControl.y
+        + t * t * bottomLeft.y
+    );
+  };
+
+  // 下カーブの接続部分だけ少し内側へずらす
+  const trimT = THREE.MathUtils.clamp(
+    cornerRadius / halfBottom,
+    0.06,
+    0.18
+  );
+
+  const bottomCurveStart = bottomCurvePoint(trimT);
+  const bottomCurveEnd = bottomCurvePoint(1 - trimT);
+
+  // 切り取った中央部分のカーブを、元のお椀形状のまま維持する
+  const derivativeAtStart = new THREE.Vector2(
+    2 * (
+      (1 - trimT) * (bottomControl.x - bottomRight.x)
+      + trimT * (bottomLeft.x - bottomControl.x)
+    ),
+    2 * (
+      (1 - trimT) * (bottomControl.y - bottomRight.y)
+      + trimT * (bottomLeft.y - bottomControl.y)
+    )
+  );
+
+  const middleCurveControl = bottomCurveStart
+    .clone()
+    .add(
+      derivativeAtStart.multiplyScalar(
+        (1 - trimT * 2) / 2
+      )
+    );
+
+  // 各角の接続位置
+  const topLeftOnTop = moveToward(
+    topLeft,
+    topRight,
+    cornerRadius
+  );
+
+  const topLeftOnSide = moveToward(
+    topLeft,
+    bottomLeft,
+    cornerRadius
+  );
+
+  const topRightOnTop = moveToward(
+    topRight,
+    topLeft,
+    cornerRadius
+  );
+
+  const topRightOnSide = moveToward(
+    topRight,
+    bottomRight,
+    cornerRadius
+  );
+
+  const bottomRightOnSide = moveToward(
+    bottomRight,
+    topRight,
+    cornerRadius
+  );
+
+  const bottomLeftOnSide = moveToward(
+    bottomLeft,
+    topLeft,
+    cornerRadius
+  );
+
+  const shape = new THREE.Shape();
+
+  // 左上の上辺側から開始
+  shape.moveTo(
+    topLeftOnTop.x,
+    topLeftOnTop.y
+  );
+
+  // 上辺
+  shape.lineTo(
+    topRightOnTop.x,
+    topRightOnTop.y
+  );
+
+  // 右上角
+  shape.quadraticCurveTo(
+    topRight.x,
+    topRight.y,
+    topRightOnSide.x,
+    topRightOnSide.y
+  );
+
+  // 右斜辺
+  shape.lineTo(
+    bottomRightOnSide.x,
+    bottomRightOnSide.y
+  );
+
+  // 右下角
+  shape.quadraticCurveTo(
+    bottomRight.x,
+    bottomRight.y,
+    bottomCurveStart.x,
+    bottomCurveStart.y
+  );
+
+  // 元のお椀型カーブを維持
+  shape.quadraticCurveTo(
+    middleCurveControl.x,
+    middleCurveControl.y,
+    bottomCurveEnd.x,
+    bottomCurveEnd.y
+  );
+
+  // 左下角
+  shape.quadraticCurveTo(
+    bottomLeft.x,
+    bottomLeft.y,
+    bottomLeftOnSide.x,
+    bottomLeftOnSide.y
+  );
+
+  // 左斜辺
+  shape.lineTo(
+    topLeftOnSide.x,
+    topLeftOnSide.y
+  );
+
+  // 左上角
+  shape.quadraticCurveTo(
+    topLeft.x,
+    topLeft.y,
+    topLeftOnTop.x,
+    topLeftOnTop.y
+  );
+
+  shape.closePath();
+
+  const geometry = new THREE.ExtrudeGeometry(shape, {
     depth: d.pelvisDepth,
-    bevel: d.pelvisBevel,
-    cornerRadius: d.pelvisCornerRadius,
+    bevelEnabled: true,
+    bevelThickness: d.pelvisBevel,
+    bevelSize: d.pelvisBevel,
+    bevelSegments: 3,
+    curveSegments: 12,
   });
+
+  geometry.center();
 
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.y = d.pelvisOffsetY;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
+
   return mesh;
 }
+// 胸：木製デッサン人形のような、上が広く下へ丸く絞られる形
+// 胸：左右対称の木製デッサン人形型
+function createChestMesh(material: THREE.Material): THREE.Mesh {
+  const d = MANNEQUIN_DIMENSIONS;
 
+  const halfHeight = d.chestSize[1] / 2;
+  const halfTop = d.chestTopWidth / 2;
+  const halfBottom = d.chestBottomWidth / 2;
+
+  /*
+   * 右側と左側を完全な鏡写しにしている。
+   * 上部は狭く、肩付近で広がり、
+   * 胸の下側へ向かって緩やかに絞る形。
+   */
+  // シンプルな4点の台形（上が広く、下がすぼまる）。反時計回り。
+  const outline = [
+    new THREE.Vector2(halfTop, halfHeight),      // 右上
+    new THREE.Vector2(-halfTop, halfHeight),     // 左上
+    new THREE.Vector2(-halfBottom, -halfHeight), // 左下
+    new THREE.Vector2(halfBottom, -halfHeight),  // 右下
+  ];
+
+  // 上辺をカーブさせた台形。左右の肩の角も丸めてなめらかにつなぐ。
+  // ▼▼▼ 上辺カーブの深さ（マイナス=山/膨らむ、プラス=谷/へこむ、0=まっすぐ）▼▼▼
+  const topCurveDepth = d.chestSize[1] * -0.18;
+  // ▲▲▲ 肩の角の丸み（大きいほど丸い）▼▼▼
+  const shoulderCorner = d.chestTopWidth * 0.18;
+  // ▲▲▲ ここまで ▲▲▲
+  // ▼▼▼ 下の角の丸み（大きいほど丸い。下辺はまっすぐのまま角だけ丸める）▼▼▼
+  const bottomCorner = d.chestBottomWidth * 0.02;
+  // ▲▲▲ ここまで ▲▲▲
+  const shape = new THREE.Shape();
+  // 右肩の角の内側から開始 → 右斜辺 → 右下の角の手前
+  shape.moveTo(halfTop, halfHeight - shoulderCorner);
+  shape.lineTo(halfBottom, -halfHeight + bottomCorner);
+  // 右下の角を丸める
+  shape.quadraticCurveTo(halfBottom, -halfHeight, halfBottom - bottomCorner, -halfHeight);
+  // 下辺（まっすぐ）→ 左下の角の手前
+  shape.lineTo(-halfBottom + bottomCorner, -halfHeight);
+  // 左下の角を丸める
+  shape.quadraticCurveTo(-halfBottom, -halfHeight, -halfBottom, -halfHeight + bottomCorner);
+  // 左斜辺 → 左肩の角の手前
+  shape.lineTo(-halfTop, halfHeight - shoulderCorner);
+  // 左肩の角を丸める
+  shape.quadraticCurveTo(-halfTop, halfHeight, -halfTop + shoulderCorner, halfHeight);
+  // 上辺のカーブ（中央が topCurveDepth ぶん上下）
+  shape.quadraticCurveTo(0, halfHeight - topCurveDepth, halfTop - shoulderCorner, halfHeight);
+  // 右肩の角を丸めて閉じる
+  shape.quadraticCurveTo(halfTop, halfHeight, halfTop, halfHeight - shoulderCorner);
+  shape.closePath();
+
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: d.chestDepth,
+    bevelEnabled: d.chestBevel > 0,
+    bevelThickness: d.chestBevel,
+    bevelSize: d.chestBevel,
+    bevelSegments: 3,
+    curveSegments: 16,
+  });
+
+  geometry.center();
+
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+
+  return mesh;
+}
 // 指1本(Capsule)。ポーズ用ボーンは持たない固定の飾りで、親(手/足)に追従するだけ。
 function createDigitMesh(
   radius: number,
@@ -120,188 +417,99 @@ function createDigitMesh(
   return mesh;
 }
 
-// 手: 手のひらの球 + 4本指 + 親指。lowerArmの末端に固定し、関節は追加しない。
-// sign: 体の中心から見てどちら側の腕か(L=-1, R=+1)。親指は体の内側に付く。
-function createHandGroup(sign: 1 | -1, material: THREE.Material): THREE.Group {
+// 手: 平たいヘラ型（デッサン人形の手）。指なし・親指なしのシンプルな一枚板。
+// lowerArmの末端に固定し、関節は追加しない。
+// sign: 体の中心から見てどちら側の腕か(L=-1, R=+1)。今回は左右対称なので未使用。
+function createHandGroup(_sign: 1 | -1, material: THREE.Material): THREE.Group {
   const d = MANNEQUIN_DIMENSIONS;
 
   const hand = new THREE.Group();
   hand.name = 'handDecoration';
 
-  // 手のひらのサイズ
-  const palmWidth = d.handRadius * 1.6;
-  const palmHeight = d.handRadius * 1.8;
-  const palmDepth = d.handRadius * 0.55;
+  // ▼▼▼ ここの数字を変えると手の形が変わります ▼▼▼
+  const handLength = d.handRadius * 3.0;   // 手の長さ（大きいほど長い手）
+  const handWidth = d.handRadius * 1.7;    // 手の幅（大きいほど幅広）
+  const handThickness = d.handRadius * 0.5; // 手の厚み（大きいほど分厚い）
+  const wristWidth = d.handRadius * 1.1;   // 手首側の幅（指先側より細くするとヘラっぽい）
+  const cornerRadius = d.handRadius * 0.45; // 角の丸み（大きいほど丸い先端）
+  // ▲▲▲ ここまで ▲▲▲
 
-  // 薄い四角形の手のひら
-  const palm = new THREE.Mesh(
-    new THREE.BoxGeometry(
-      palmWidth,
-      palmHeight,
-      palmDepth
-    ),
-    material
-  );
+  // 手首側が細く、指先側が広がる「ヘラ」の輪郭を作る（反時計回り）
+  const halfTop = handWidth / 2;      // 指先側の幅（広い）
+  const halfBottom = wristWidth / 2;  // 手首側の幅（細い）
+  // 手首を原点にして、下へ向かって指先が広がる輪郭
+const outline = [
+  new THREE.Vector2(halfBottom, 0),          // 手首側 右
+  new THREE.Vector2(-halfBottom, 0),         // 手首側 左
+  new THREE.Vector2(-halfTop, -handLength),  // 指先側 左
+  new THREE.Vector2(halfTop, -handLength),   // 指先側 右
+];
+  const shape = createRoundedPolygonShape(outline, cornerRadius);
 
-  // 手首を原点として、手のひら全体を下側へ配置
-  palm.position.set(
-    0,
-    -palmHeight / 2,
-    0
-  );
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: handThickness,
+    bevelEnabled: true,
+    bevelThickness: handThickness * 0.25,
+    bevelSize: handThickness * 0.25,
+    bevelSegments: 2,
+    curveSegments: 8,
+  });
+  // 押し出しの厚みを中心に揃える（手首を原点に置くため）
+  geometry.center();
 
+  const palm = new THREE.Mesh(geometry, material);
+  // 輪郭を「手首が原点・指先が下」に配置したので、中心を下へずらす
+  palm.position.set(0, -handLength / 2, 0);
   palm.castShadow = true;
   palm.receiveShadow = true;
   hand.add(palm);
 
-  // 4本指
-  const fingerCount = FINGER_LENGTH_SCALES.length;
-
-  for (let i = 0; i < fingerCount; i += 1) {
-    const scaleIndex =
-      sign === 1
-        ? i
-        : fingerCount - 1 - i;
-
-    const length =
-  d.fingerLength *
-  FINGER_LENGTH_SCALES[scaleIndex] *
-  1.5;
-
-    const offsetX =
-  (i - (fingerCount - 1) / 2) * d.fingerGap;
-
-// 指全体をまとめるグループ
-const fingerGroup = new THREE.Group();
-
-fingerGroup.position.set(
-  offsetX,
-  -palmHeight,
-  0
-);
-
-// 指を3つの節に分ける
-const segmentCount = 3;
-
-// 隙間はほぼ見えない程度
-const segmentGap = d.fingerRadius * 0.15;
-
-// 根元・中間・先端の長さ比率
-const segmentLengthScales = [
-  1.0,  // 根元：一番長い
-  0.78, // 中間：少し短い
-  0.58, // 先端：一番短い
-];
-
-// 隙間を除いた、3節に使える長さ
-const availableLength =
-  length - segmentGap * (segmentCount - 1);
-
-// 比率の合計
-const totalScale =
-  segmentLengthScales.reduce((sum, scale) => sum + scale, 0);
-
-let currentY = 0;
-
-for (let segmentIndex = 0; segmentIndex < segmentCount; segmentIndex += 1) {
-  const segmentLength =
-    availableLength *
-    (segmentLengthScales[segmentIndex] / totalScale);
-
-  const segment = new THREE.Mesh(
-    new THREE.CylinderGeometry(
-      d.fingerRadius * 0.85,
-      d.fingerRadius * 0.75,
-      segmentLength,
-      8
-    ),
-    material
-  );
-
-  segment.position.set(
-    0,
-    currentY - segmentLength / 2,
-    0
-  );
-
-  segment.castShadow = true;
-  segment.receiveShadow = true;
-
-  fingerGroup.add(segment);
-
-  currentY -= segmentLength + segmentGap;
-}
-
-  
-
-hand.add(fingerGroup);
-  }
-
-  // 親指
-  const thumbSign = -sign;
-  // 親指の付け根を三角形の立体で表現
-const thumbBaseShape = new THREE.Shape();
-
-thumbBaseShape.moveTo(0, 0);
-thumbBaseShape.lineTo(
-  thumbSign * palmWidth * 0.42,
-  -palmHeight * 0.18
-);
-thumbBaseShape.lineTo(
-  thumbSign * palmWidth * 0.50,
-  -palmHeight * 0.62
-);
-thumbBaseShape.closePath();
-
-const thumbBaseGeometry = new THREE.ExtrudeGeometry(
-  thumbBaseShape,
-  {
-    depth: palmDepth * 0.75,
-    bevelEnabled: true,
-    bevelThickness: d.thumbRadius * 0.18,
-    bevelSize: d.thumbRadius * 0.12,
-    bevelSegments: 2,
-  }
-);
-
-thumbBaseGeometry.center();
-
-const thumbBaseMesh = new THREE.Mesh(
-  thumbBaseGeometry,
-  material
-);
-
-thumbBaseMesh.position.set(
-  thumbSign * palmWidth * 0.51,
-  -palmHeight * 0.4,
-  0
-);
-thumbBaseMesh.rotation.z = thumbSign * -0.6;
-thumbBaseMesh.castShadow = true;
-thumbBaseMesh.receiveShadow = true;
-
-hand.add(thumbBaseMesh);
-
-  const thumb = createDigitMesh(
-    d.thumbRadius,
-    d.thumbLength,
-    material
-  );
-
-  thumb.position.set(
-    thumbSign * palmWidth * 0.8,
-    -palmHeight * 0.75,
-    0
-  );
-
-  thumb.rotation.z =
-    thumbSign * d.thumbAngle;
-
-  hand.add(thumb);
-
   return hand;
-}
+}// 足: 平たいヘラ型（手と同じ作り）。かかと側が細く、つま先側が広がる一枚板を
+// 水平に寝かせて前(+Z)へ向ける。足指なし。footボーンの末端に固定。
+function createFootGroup(_sign: 1 | -1, material: THREE.Material): THREE.Group {
+  const d = MANNEQUIN_DIMENSIONS;
 
+  const foot = new THREE.Group();
+  foot.name = 'footDecoration';
+
+  // ▼▼▼ ここの数字を変えると足の形が変わります ▼▼▼
+  const footLength = d.footSize[2];          // 足の長さ(前後、大きいほど長い)
+  const toeWidth = d.footSize[0] * 1.2;      // つま先側の幅(広い)
+  const heelWidth = d.footSize[0] * 0.65;    // かかと側の幅(細くするとヘラっぽい)
+  const footThickness = d.footSize[1] * 0.65;// 足の厚み(甲の高さ)
+  const cornerRadius = d.footSize[0] * 0.28; // 角の丸み(つま先の丸さ・かかと幅の半分未満に)
+  // ▲▲▲ ここまで ▲▲▲
+
+  const halfToe = toeWidth / 2;      // つま先側(広い)
+  const halfHeel = heelWidth / 2;    // かかと側(細い)
+  // かかとを原点にして、前へ向かってつま先が広がる輪郭
+  const outline = [
+  new THREE.Vector2(halfHeel, 0),            // かかと 右
+  new THREE.Vector2(-halfHeel, 0),           // かかと 左
+  new THREE.Vector2(-halfToe, -footLength),  // つま先 左
+  new THREE.Vector2(halfToe, -footLength),   // つま先 右
+];
+  const shape = createRoundedPolygonShape(outline, cornerRadius);
+
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth: footThickness,
+    bevelEnabled: true,
+    bevelThickness: footThickness * 0.25,
+    bevelSize: footThickness * 0.25,
+    bevelSegments: 2,
+    curveSegments: 8,
+  });
+
+  const sole = new THREE.Mesh(geometry, material);
+  // 平らな板を水平に寝かせて、つま先を前(+Z)へ向ける
+  sole.rotation.x = -Math.PI / 2;
+  sole.castShadow = true;
+  sole.receiveShadow = true;
+  foot.add(sole);
+
+  return foot;
+}
 // 足指5本を足の甲メッシュへ追加する。関節は追加しない固定の飾り。
 // sign: L=-1, R=+1。親指(太い指)は体の内側に来る。
 function addToes(footMesh: THREE.Mesh, sign: 1 | -1, material: THREE.Material): void {
@@ -402,7 +610,7 @@ export function createMannequin(): MannequinModel {
   hips.add(spine);
 
   // 腰の球: 胸と骨盤の間のくびれ部分。スパイン関節に追従して曲がる
-  const spineMesh = createJointSphere(d.waistRadius, bodyMaterial);
+  const spineMesh = createBellyMesh(bodyMaterial);
   spineMesh.position.y = d.spineLength * 0.45;
   spine.add(spineMesh);
 
@@ -412,17 +620,7 @@ export function createMannequin(): MannequinModel {
   chest.position.set(0, d.spineLength, 0);
   spine.add(chest);
 
-  const chestMesh = new THREE.Mesh(
-    createTaperedBlockGeometry({
-      topWidth: d.chestTopWidth,
-      bottomWidth: d.chestBottomWidth,
-      height: d.chestSize[1],
-      depth: d.chestDepth,
-      bevel: d.chestBevel,
-      cornerRadius: d.chestCornerRadius,
-    }),
-    bodyMaterial
-  );
+  const chestMesh = createChestMesh(bodyMaterial);
   chestMesh.position.y = d.chestSize[1] / 2;
   chestMesh.castShadow = true;
   chestMesh.receiveShadow = true;
@@ -454,11 +652,11 @@ export function createMannequin(): MannequinModel {
   for (const { side, sign } of sides) {
     const shoulderPosition = new THREE.Vector3(
   (d.shoulderWidth / 2 + d.jointRadius * 0.7) * sign,
-  d.chestSize[1] * 0.85,
+  d.chestSize[1] * 0.70,
   0
 );
     const shoulderJoint = createJointSphere(
-  d.jointRadius,
+  d.jointRadius* 1.45,
   jointMaterial
 );
     shoulderJoint.position.copy(shoulderPosition);
@@ -470,8 +668,8 @@ export function createMannequin(): MannequinModel {
   d.upperArmLength,
   d.armRadius,
   bodyMaterial,
-  d.jointRadius * 1.0,
-  d.jointRadius * 1.0
+  d.jointRadius * 0.8,
+  d.jointRadius * 0.55
 );
     upperArm.position.copy(shoulderPosition);
     chest.add(upperArm);
@@ -487,32 +685,40 @@ export function createMannequin(): MannequinModel {
     const lowerArm = createLimbBone(
   lowerArmName,
   d.lowerArmLength,
-  d.armRadius * 0.9,
+  d.armRadius * 0.75,
   bodyMaterial,
-  d.jointRadius * 1.0,
+  d.jointRadius * 0.55,
   0
 );
     lowerArm.position.set(0, -d.upperArmLength, 0);
     upperArm.add(lowerArm);
 
-    const hand = createHandGroup(sign, bodyMaterial);
+    // 手首の関節ボール（肘・膝と同じ見た目の丸）を前腕の先に置く
+    const wristJoint = createJointSphere(d.jointRadius * 0.85, jointMaterial);
+    wristJoint.position.set(0, -d.lowerArmLength, 0);
+    lowerArm.add(wristJoint);
 
-hand.position.set(
-  0,
-  -d.lowerArmLength,
-  0
-);
+    // 手首ボーン(hand_L / hand_R): ここが「回転する関節」。
+    // ポーズJSONの手首データはこのグループのrotationに書き込まれる。
+    // 初期回転はゼロ（applyPoseが上書きしても破綻しないように、90°回転は子側で持つ）。
+    const handName = `hand_${side}` as BoneName;
+    const handBone = new THREE.Group();
+    handBone.name = handName;
+    handBone.userData.bone = handName;
+    handBone.position.set(0, -d.lowerArmLength, 0);
+    lowerArm.add(handBone);
 
-// 左右それぞれ反対方向へ90度回転し、親指を手前へ向ける
-hand.rotation.y = sign * (Math.PI / 2);
-
-lowerArm.add(hand);
+    // 見た目のヘラ型の手。90°回転はこちら（手首ボーンの子）に固定するので、
+    // ポーズで手首が動いても手のひらの向きは保たれる。
+    const handMesh = createHandGroup(sign, bodyMaterial);
+    handMesh.rotation.y = sign * (Math.PI / 2);
+    handBone.add(handMesh);
   }
 
   // Legs
   for (const { side, sign } of sides) {
     const hipJointPosition = new THREE.Vector3(
-  (d.hipWidth / 2 + d.jointRadius * 0.8) * sign,
+  (d.hipWidth / 2 + d.jointRadius * 0.4) * sign,
   -d.pelvisSize[1] / 2,
   0
 );
@@ -531,13 +737,13 @@ lowerArm.add(hand);
   d.legRadius,
   bodyMaterial,
   d.jointRadius * 1.1,
-  d.jointRadius * 1.1
+  d.jointRadius * 0.8
 );
     upperLeg.position.copy(hipJointPosition);
     hips.add(upperLeg);
 
     const kneeJoint = createJointSphere(
-  d.jointRadius,
+  d.jointRadius *1.2,
   jointMaterial
 );
     kneeJoint.position.set(0, -d.upperLegLength, 0);
@@ -547,14 +753,19 @@ lowerArm.add(hand);
     const lowerLeg = createLimbBone(
   lowerLegName,
   d.lowerLegLength,
-  d.legRadius * 0.85,
+  d.legRadius * 0.75,
   bodyMaterial,
-  d.jointRadius * 1.1,
-  0
+  d.jointRadius * 0.5,
+  d.jointRadius * 0.6    // ← 足首ボールの分だけすねを短く
 );
     lowerLeg.position.set(0, -d.upperLegLength, 0);
     upperLeg.add(lowerLeg);
-
+    const ankleJoint = createJointSphere(
+  d.jointRadius * 0.95,   // 膝(1.2)より小さめ、手首(0.85)よりちょい大きめ
+  jointMaterial
+);
+    ankleJoint.position.set(0, -d.lowerLegLength, 0);  // すねの下端＝足の付け根
+    lowerLeg.add(ankleJoint);
     const footName = `foot_${side}` as BoneName;
     const foot = new THREE.Group();
     foot.name = footName;
@@ -562,11 +773,10 @@ lowerArm.add(hand);
     foot.position.set(0, -d.lowerLegLength, 0);
     lowerLeg.add(foot);
 
-    const footMesh = new THREE.Mesh(new THREE.BoxGeometry(...d.footSize), bodyMaterial);
-    footMesh.position.set(0, -d.footSize[1] / 2, d.footSize[2] / 2 - d.legRadius);
-    footMesh.castShadow = true;
-    footMesh.receiveShadow = true;
-    addToes(footMesh, sign, bodyMaterial);
+    const footMesh = createFootGroup(sign, bodyMaterial);
+    footMesh.rotation.y = sign * (Math.PI / 180) * 8;  // ← 追加：8°外向き
+    // 足首の真下に、かかとを少し後ろへ引いて配置(数値で微調整OK)
+    footMesh.position.set(0, -d.footHeight, -d.legRadius * 0.65);  // 約22%まで後退
     foot.add(footMesh);
   }
 

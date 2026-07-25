@@ -44,6 +44,7 @@ const FBX2GLTF = path.join(
 
 const args = process.argv.slice(2);
 const FRAMES = Math.max(1, parseInt(args[args.indexOf('--frames') + 1], 10) || 1);
+const FORCE = args.includes('--force');
 const ROTATION_EPSILON = 0.005; // これ未満の回転は「初期姿勢」とみなし JSON から省く(rad)
 
 /* ================================================================
@@ -182,14 +183,19 @@ function solveFrame(skeleton, restWorld, animWorld, sides) {
     world[`upperLeg_${side}`] = delta(`${mx}UpLeg`);
     world[`lowerLeg_${side}`] = delta(`${mx}Leg`);
     world[`foot_${side}`] = delta(`${mx}Foot`);
+    // 手首: Mixamoの「前腕→手」のローカル回転だけを取り出し、aimした前腕の上に乗せる
+    // (deltaはT字レスト基準で腕の"下ろし"を二重に含み手が捻れるため)
+    const wristLocal = animWorld[B(`${mx}ForeArm`)].quaternion.clone().invert()
+      .multiply(animWorld[B(`${mx}Hand`)].quaternion);
+    world[`hand_${side}`] = world[`lowerArm_${side}`].clone().multiply(wristLocal);
   }
 
   // --- ワールド → マネキン階層のローカル回転へ変換 ---
   // 階層: hips → spine → chest → upperArm → lowerArm / hips → upperLeg → lowerLeg → foot
   const PARENT = {
     hips: null, spine: 'hips', chest: 'spine', head: 'chest',
-    upperArm_L: 'chest', lowerArm_L: 'upperArm_L',
-    upperArm_R: 'chest', lowerArm_R: 'upperArm_R',
+    upperArm_L: 'chest', lowerArm_L: 'upperArm_L', hand_L: 'lowerArm_L',
+    upperArm_R: 'chest', lowerArm_R: 'upperArm_R', hand_R: 'lowerArm_R',
     upperLeg_L: 'hips', lowerLeg_L: 'upperLeg_L', foot_L: 'lowerLeg_L',
     upperLeg_R: 'hips', lowerLeg_R: 'upperLeg_R', foot_R: 'lowerLeg_R',
   };
@@ -267,7 +273,7 @@ async function main() {
       const firstId = toId(baseName, 1);
 
       // 差分ビルド: 1フレーム目の JSON があればスキップ
-      if (byId.has(firstId) && fs.existsSync(path.join(POSES_DIR, `${firstId}.json`))) {
+      if (!FORCE && byId.has(firstId) && fs.existsSync(path.join(POSES_DIR, `${firstId}.json`))) {
         skipped += FRAMES;
         continue;
       }
