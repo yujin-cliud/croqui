@@ -239,6 +239,23 @@
       "Sports"
     ],
     "thumbnail": null
+  },
+  {
+    "id": "jogging_001",
+    "name": "Jogging",
+    "file": "jogging_001.json",
+    "tags": [
+      "Running"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "strut_walking_001",
+    "name": "Strut Walking",
+    "file": "strut_walking_001.json",
+    "tags": [
+      "Walking"
+    ],
+    "thumbnail": null
   }
-  
 ]
