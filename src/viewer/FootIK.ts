@@ -65,6 +65,9 @@ function solveLegIK(boneMap: BoneMap, side: Side, target: THREE.Vector3): void {
   if (!upperLeg || !lowerLeg || !foot) return;
   const parent = upperLeg.parent; // hips
   if (!parent) return;
+  // IKで脚を曲げるとfoot(すねの子)がすねと一緒に回り、足裏の向きがポーズ意図からズレる。
+  // 曲げる前(FK)の足のワールド向きを覚えておき、最後に復元する。
+  const footWorldQ = foot.getWorldQuaternion(new THREE.Quaternion());
 
   const L1 = lowerLeg.position.length(); // 股→膝(太もも)
   const L2 = foot.position.length();     // 膝→足首(すね)
@@ -102,4 +105,10 @@ function solveLegIK(boneMap: BoneMap, side: Side, target: THREE.Vector3): void {
   const upperInv = upperLeg.getWorldQuaternion(new THREE.Quaternion()).invert();
   lowerLeg.quaternion.copy(upperInv.multiply(q2));
   lowerLeg.updateWorldMatrix(true, false);
+
+  // 足の向きを復元: 足首の"位置"だけIKで直し、"向き"はFK(ポーズ)通りに保つ。
+  // これをしないと、すねの角度変化がそのまま足に乗り足裏が傾く/つま先がねじれる。
+  const lowerInvW = lowerLeg.getWorldQuaternion(new THREE.Quaternion()).invert();
+  foot.quaternion.copy(lowerInvW.multiply(footWorldQ));
+  foot.updateWorldMatrix(true, false);
 }

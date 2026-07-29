@@ -24,8 +24,8 @@ type IkTargets = Partial<Record<`hand_${Side}`, [number, number, number]>>;
  * 肘の曲がる向きは、IK前(FK)の肘位置をヒントに使い、元のポーズらしい自然な向きを保つ。
  */
 export function applyArmIK(boneMap: BoneMap, pose: Pose): void {
-  // IK無効指定のポーズは何もしない(座り・ジェスチャー等の誤爆回避用の手動veto)
-  if ((pose as { noIk?: boolean }).noIk) return;
+  // オプトイン方式: useIk が明示的にtrueのポーズだけIKを効かせる(誤爆防止)
+  if (!(pose as { useIk?: boolean }).useIk) return;
 
   const ik = (pose as { ik?: IkTargets }).ik;
   if (!ik) return;
