@@ -21,6 +21,10 @@
  *                 「肩→肘」「肘→手首」のワールド方向ベクトルに -Y 軸を向ける回転を解く
  *   - 左右対応はボーン名でなくレスト時のワールドX座標で決める(マネキンの _R は +X 側)。
  *     見た目の空間配置がそのまま一致する(鏡像にならない)。
+ *   - [接触IK/フェーズ①] 手が胴(腰)に触れているポーズは、手首の目標点を pose.ik に焼く。
+ *     角度FKだけでは接触位置を保証できないため、実行時に腕2ボーンIKでこの点へ届かせる。
+ *     目標は「Mixamoの手ワールド座標」を直接使わず、hipsローカルに移して体長で正規化し、
+ *     さらにマネキンの腰表面(楕円断面)へスナップする。詳細は solveHandContacts を参照。
  */
 
 import { execFileSync } from 'node:child_process';
@@ -220,6 +224,112 @@ function solveFrame(skeleton, restWorld, animWorld, sides) {
 }
 
 /* ================================================================
+ * 接触IK ターゲット(フェーズ①)
+ *   手が胴(腰)に触れているポーズを検出し、手首IKの目標点を pose.ik に焼く。
+ *
+ *   [判定] 接触してるか否かは "Mixamo 自身の身体" 基準で測る:
+ *     - 本物の腰手ポーズは手が Mixamo 女性の"肉のある腰"に載る。これを細いマネキン腰から
+ *       測ると 9cm ほど離れて見え(=浮きの正体)、マネキン基準だと誤って弾いてしまう。
+ *     - そこで「手→最寄りの股関節(UpLeg)距離」を腕リーチで正規化して判定する。
+ *       腰に載った手はこの比が小さく、空中/伸ばした手は大きい。体格差はリーチ正規化で吸収。
+ *   [配置] 検出したら目標は "マネキン" 基準で置く:
+ *     - 手を hips ローカル→マネキン尺へ写し、断面(x,z)を高さに応じた下胴の楕円面
+ *       (低い=骨盤で広い / 高い=腰くびれで細い)+ handRadius へスナップする。
+ *       → 手のひらが物理的に必ずマネキン腰へ触れる点になる(角度FKの"浮き"を根絶)。
+ *   非接触ポーズは目標を焼かない。実行時IKは目標のある腕だけ動かすので従来のFK表示のまま。
+ *
+ *   ★ 数値は mannequin.ts の MANNEQUIN_DIMENSIONS が真実の出処。ここは必要値のミラー。
+ *     mannequin.ts を変えたら下も合わせ、`npm run import:poses -- --force` で焼き直す。
+ * ============================================================== */
+const MANNEQUIN = {
+  hipsToHead: 0.55,        // hips原点→頭のおおよその縦長。Mixamo体長との正規化スケール合わせ用
+  handRadius: 0.055,       // handRadius … 手首をこのぶん表面から離すと手のひらが面に乗る
+  // 下胴の断面半径。低い所(骨盤)は広く、高い所(腰くびれ)は細い。高さで補間する。
+  pelvisHalfWidth: 0.15,   // = pelvisBottomWidth(0.30) / 2
+  pelvisHalfDepth: 0.035,  // = pelvisDepth(0.07) / 2
+  waistHalfWidth: 0.085,   // = bellyWidth(0.17) / 2
+  waistHalfDepth: 0.0375,  // = bellyDepth(0.075) / 2
+  // 骨盤↔腰くびれの補間に使う hips ローカルの高さ(マネキン尺)
+  pelvisY: -0.05,
+  waistY: 0.20,
+};
+// 接触判定のしきい値(実データで較正。ラベル付きポーズが増えたら要再調整)。
+// 「腰に手を置く」動作の本質は "肘が曲がってる" こと。股関節への単純な近さだと、
+// 前でだらんと下ろした手(股関節に近いが曲がってない)を誤って拾ってしまうため複合条件にする。
+const CONTACT = {
+  elbowMinDeg: 45,     // 肘がこれ以上曲がってる=手を能動的に置いている(下ろした手を除外)
+  yMin: -0.15,         // 手の高さ(hipsローカル・マネキン尺)。骨盤〜腰の帯だけ拾う
+  yMax: 0.30,          //   ↑頭上/肩上や、低く前で組む手を除外
+  axisMaxRatio: 0.70,  // 手→胴中心軸の距離÷腕リーチ。伸ばしきった手を除外
+};
+
+/** 点pから線分ab への最短距離 */
+function distToSeg(p, a, b) {
+  const ab = b.clone().sub(a);
+  const t = Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / ab.lengthSq()));
+  return p.distanceTo(a.clone().add(ab.multiplyScalar(t)));
+}
+
+/** hips ローカルの高さ y における下胴の楕円半径(手のひらぶん外)を返す */
+function waistEllipseAt(y) {
+  const t = clamp01((y - MANNEQUIN.pelvisY) / (MANNEQUIN.waistY - MANNEQUIN.pelvisY));
+  const halfW = lerp(MANNEQUIN.pelvisHalfWidth, MANNEQUIN.waistHalfWidth, t);
+  const halfD = lerp(MANNEQUIN.pelvisHalfDepth, MANNEQUIN.waistHalfDepth, t);
+  return { ax: halfW + MANNEQUIN.handRadius, az: halfD + MANNEQUIN.handRadius };
+}
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+
+/**
+ * 返り値: { hand_L?: [x,y,z], hand_R?: [x,y,z] }
+ *   値は hips ローカル・マネキン尺の手首目標点。接触がなければキー自体を含めない。
+ */
+function solveHandContacts(skeleton, animWorld, sides) {
+  const B = (name) => findBone(skeleton, name);
+  const hips = animWorld[B('Hips')];
+  const hipsPos = hips.position;
+  const hipsQuatInv = hips.quaternion.clone().invert();
+  const neckPos = animWorld[B('Neck')].position;
+  const mixamoTorso = animWorld[B('Head')].position.clone().sub(hipsPos).length() || 1;
+  const toMannequin = MANNEQUIN.hipsToHead / mixamoTorso;
+
+  const out = {};
+  for (const side of ['L', 'R']) {
+    const mx = sides[side];
+    const armP = animWorld[B(`${mx}Arm`)].position;
+    const foreP = animWorld[B(`${mx}ForeArm`)].position;
+    const handP = animWorld[B(`${mx}Hand`)].position;
+
+    // --- 接触判定(Mixamo 身体基準・複合条件) ---
+    // (1) 肘の曲げ角。手を能動的に置いているか(下ろした手を除外)
+    const v1 = foreP.clone().sub(armP).normalize();
+    const v2 = handP.clone().sub(foreP).normalize();
+    const elbowDeg = THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(v1.dot(v2), -1, 1)));
+    if (elbowDeg < CONTACT.elbowMinDeg) continue;
+
+    // 手を hips ローカル→マネキン尺へ
+    const local = handP.clone().sub(hipsPos).applyQuaternion(hipsQuatInv).multiplyScalar(toMannequin);
+
+    // (2) 高さ帯(骨盤〜腰)。頭上/肩上や低く前で組む手を除外
+    if (local.y < CONTACT.yMin || local.y > CONTACT.yMax) continue;
+
+    // (3) 胴中心軸への近さ(腕リーチ正規化)。伸ばしきった手を除外
+    const reach = armP.distanceTo(foreP) + foreP.distanceTo(handP);
+    const axisRatio = distToSeg(handP, hipsPos, neckPos) / reach;
+    if (axisRatio > CONTACT.axisMaxRatio) continue;
+
+    // --- 目標配置(マネキン基準) ---
+    // 断面(x,z)を高さ相応の下胴楕円へスナップ
+    const radial = Math.hypot(local.x, local.z);
+    if (radial < 1e-4) continue; // 向きが定まらない(真上/真下)→ 除外
+    const { ax, az } = waistEllipseAt(local.y);
+    const s = 1 / Math.hypot(local.x / ax, local.z / az);
+    out[`hand_${side}`] = [round3(local.x * s), round3(local.y), round3(local.z * s)];
+  }
+  return out;
+}
+
+/* ================================================================
  * 入出力
  * ============================================================== */
 
@@ -259,7 +369,7 @@ async function main() {
   const io = new NodeIO();
   const index = fs.existsSync(INDEX_PATH) ? JSON.parse(fs.readFileSync(INDEX_PATH, 'utf8')) : [];
   const byId = new Map(index.map((p) => [p.id, p]));
-  let added = 0, skipped = 0;
+  let added = 0, skipped = 0, contactCount = 0;
 
   const tagDirs = fs.readdirSync(SRC_DIR, { withFileTypes: true })
     .filter((d) => d.isDirectory()).map((d) => d.name);
@@ -296,6 +406,7 @@ async function main() {
         times.forEach((t, k) => {
           const animWorld = computeWorld(skeleton, t);
           const eulers = solveFrame(skeleton, restWorld, animWorld, sides);
+          const contacts = solveHandContacts(skeleton, animWorld, sides);
           const id = toId(baseName, k + 1);
           const existing = byId.get(id);
           const pose = {
@@ -304,12 +415,33 @@ async function main() {
             tags: existing?.tags ?? tags,
             bones: eulersToPoseBones(eulers),
           };
+          // 既存ポーズJSONに手書きした手動フラグ(noIk/noFootIk)を引き継ぐ(--force で消さない)。
+          // 座り→noIk、ジャンプ等→noFootIk。焼き直しても崩れ対策のvetoが残る。
+          const posePath = path.join(POSES_DIR, `${id}.json`);
+          if (fs.existsSync(posePath)) {
+            try {
+              const prev = JSON.parse(fs.readFileSync(posePath, 'utf8'));
+              if (prev.noIk) pose.noIk = true;
+              if (prev.noFootIk) pose.noFootIk = true;
+            } catch {
+              // 既存JSONが壊れていても無視して新規に焼く
+            }
+          }
+          // 接触があれば手首IKの目標点を焼く(なければ ik 自体を出さない=従来ポーズと同一形式)
+          if (Object.keys(contacts).length) {
+            pose.ik = contacts;
+            contactCount++;
+            const desc = Object.entries(contacts)
+              .map(([b, v]) => `${b}=(${v.join(', ')})`).join(' / ');
+            process.stdout.write(`\n  ↳ 接触検出 [${id}]: ${desc} `);
+          }
           fs.writeFileSync(path.join(POSES_DIR, `${id}.json`), JSON.stringify(pose, null, 2) + '\n');
           byId.set(id, {
             id,
             name: pose.name,
             file: `${id}.json`,
             tags: pose.tags,
+            hidden: existing?.hidden, // 一覧の隠し指定も引き継ぐ(undefinedならJSONから省かれる)
             thumbnail: existing?.thumbnail ?? null,
           });
           added++;
@@ -323,7 +455,7 @@ async function main() {
 
   fs.writeFileSync(INDEX_PATH, JSON.stringify([...byId.values()], null, 2) + '\n');
   fs.rmSync(TMP_DIR, { recursive: true, force: true });
-  console.log(`\n完了: 追加 ${added} / スキップ ${skipped} / 合計 ${byId.size} ポーズ`);
+  console.log(`\n完了: 追加 ${added} / スキップ ${skipped} / 合計 ${byId.size} ポーズ(うち接触 ${contactCount} 手)`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

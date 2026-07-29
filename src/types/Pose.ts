@@ -7,6 +7,7 @@ export type Pose = {
   name: string;
   tags: string[];
   bones: Record<string, PoseBone>;
+  ik?: Partial<Record<'hand_L' | 'hand_R', [number, number, number]>>;
 };
 
 export type PoseIndexItem = {
@@ -15,6 +16,7 @@ export type PoseIndexItem = {
   file: string;
   tags: string[];
   thumbnail: string | null;
+  hidden?: boolean;
 };
 
 // マネキンが対応するボーン名の一覧。Pose JSONの`bones`はこの名前のサブセットを

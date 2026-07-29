@@ -21,7 +21,11 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const showGrid = useSettingsStore((state) => state.showGrid);
   const defaultTimer = useSettingsStore((state) => state.defaultTimer);
   const autoNext = useSettingsStore((state) => state.autoNext);
-
+  const lightAzimuth = useSettingsStore((state) => state.lightAzimuth);
+  const lightElevation = useSettingsStore((state) => state.lightElevation);
+  const lightIntensity = useSettingsStore((state) => state.lightIntensity);
+  const ambientIntensity = useSettingsStore((state) => state.ambientIntensity);
+  const cameraFov = useSettingsStore((state) => state.cameraFov);
   return (
     <div className="panel-overlay" role="dialog" aria-label="設定">
       <div className="panel">
@@ -84,6 +88,46 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
               onChange={(event) => void settingsManager.update({ autoNext: event.target.checked })}
             />
             タイマー終了時に自動で次のポーズへ進む
+          </label>
+        </fieldset>
+        <fieldset className="settings-group">
+          <legend>光源</legend>
+
+          <label className="settings-slider">
+            光の向き（左右）
+            <input type="range" min={0} max={360} step={5}
+              value={lightAzimuth}
+              onChange={(e) => void settingsManager.update({ lightAzimuth: Number(e.target.value) })} />
+          </label>
+
+          <label className="settings-slider">
+            光の高さ（上下）
+            <input type="range" min={10} max={90} step={5}
+              value={lightElevation}
+              onChange={(e) => void settingsManager.update({ lightElevation: Number(e.target.value) })} />
+          </label>
+
+          <label className="settings-slider">
+            光の強さ
+            <input type="range" min={0} max={2} step={0.1}
+              value={lightIntensity}
+              onChange={(e) => void settingsManager.update({ lightIntensity: Number(e.target.value) })} />
+          </label>
+
+          <label className="settings-slider">
+            陰影の強さ（環境光）
+            <input type="range" min={0} max={1} step={0.05}
+              value={ambientIntensity}
+              onChange={(e) => void settingsManager.update({ ambientIntensity: Number(e.target.value) })} />
+          </label>
+        </fieldset>
+        <fieldset className="settings-group">
+          <legend>遠近感（パース）</legend>
+          <label className="settings-slider">
+            弱い（望遠）〜 強い（広角）
+            <input type="range" min={20} max={70} step={1}
+              value={cameraFov}
+              onChange={(e) => void settingsManager.update({ cameraFov: Number(e.target.value) })} />
           </label>
         </fieldset>
       </div>

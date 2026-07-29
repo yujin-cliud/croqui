@@ -20,9 +20,9 @@ export function Environment() {
   }, [scene, backgroundColor]);
 
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.002, 0]} receiveShadow>
       <circleGeometry args={[6, 48]} />
-      <meshStandardMaterial color={BACKGROUND_COLORS[backgroundColor]} roughness={1} metalness={0} />
+      <shadowMaterial opacity={0.25} />
     </mesh>
   );
 }

@@ -1,0 +1,115 @@
+{
+  "noFootIk": true,
+  "id": "male_dynamic_pose_001",
+  "name": "Male Dynamic Pose",
+  "tags": [
+    "Jump"
+  ],
+  "bones": {
+    "hips": {
+      "rotation": [
+        -0.049,
+        -0.059,
+        -0.125
+      ]
+    },
+    "spine": {
+      "rotation": [
+        0.259,
+        0.059,
+        0.167
+      ]
+    },
+    "chest": {
+      "rotation": [
+        1.006,
+        -0.049,
+        -0.099
+      ]
+    },
+    "head": {
+      "rotation": [
+        0.35,
+        0.012,
+        -0.008
+      ]
+    },
+    "upperArm_L": {
+      "rotation": [
+        -1.141,
+        -0.16,
+        -2.037
+      ]
+    },
+    "lowerArm_L": {
+      "rotation": [
+        -0.002,
+        -0.003,
+        0.007
+      ]
+    },
+    "hand_L": {
+      "rotation": [
+        -0.013,
+        -0.028,
+        0.08
+      ]
+    },
+    "upperArm_R": {
+      "rotation": [
+        -1.089,
+        0.189,
+        2.029
+      ]
+    },
+    "hand_R": {
+      "rotation": [
+        0.007,
+        0.009,
+        -0.09
+      ]
+    },
+    "upperLeg_L": {
+      "rotation": [
+        -1.651,
+        -0.236,
+        -0.358
+      ]
+    },
+    "lowerLeg_L": {
+      "rotation": [
+        2.126,
+        0.036,
+        0.375
+      ]
+    },
+    "foot_L": {
+      "rotation": [
+        0.678,
+        0.047,
+        0.019
+      ]
+    },
+    "upperLeg_R": {
+      "rotation": [
+        -0.983,
+        -0.024,
+        0.626
+      ]
+    },
+    "lowerLeg_R": {
+      "rotation": [
+        2.512,
+        0.091,
+        -0.209
+      ]
+    },
+    "foot_R": {
+      "rotation": [
+        0.634,
+        0.062,
+        0.083
+      ]
+    }
+  }
+}

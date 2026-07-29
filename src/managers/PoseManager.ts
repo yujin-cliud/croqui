@@ -16,7 +16,7 @@ export class PoseManager {
     store.setError(null);
 
     try {
-      const poses = loadPoseIndex();
+      const poses = loadPoseIndex().filter((item) => !item.hidden);
       store.setPoses(poses);
       store.setFilteredPoseIds(poses.map((item) => item.id));
 

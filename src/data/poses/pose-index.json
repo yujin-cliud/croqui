@@ -1,79 +1,7 @@
 [
   {
-    "id": "standing_001",
-    "name": "立ちポーズ 001",
-    "file": "standing_001.json",
-    "tags": [
-      "立ち",
-      "正面"
-    ],
-    "thumbnail": null
-  },
-  {
-    "id": "standing_back_001",
-    "name": "立ちポーズ 002（後ろ姿）",
-    "file": "standing_back_001.json",
-    "tags": [
-      "立ち",
-      "後ろ姿"
-    ],
-    "thumbnail": null
-  },
-  {
-    "id": "standing_arms_up_001",
-    "name": "立ちポーズ 003（腕上げ）",
-    "file": "standing_arms_up_001.json",
-    "tags": [
-      "立ち",
-      "正面",
-      "腕上げ"
-    ],
-    "thumbnail": null
-  },
-  {
-    "id": "standing_one_leg_001",
-    "name": "立ちポーズ 004（片足立ち）",
-    "file": "standing_one_leg_001.json",
-    "tags": [
-      "立ち",
-      "正面",
-      "片足立ち"
-    ],
-    "thumbnail": null
-  },
-  {
-    "id": "sitting_001",
-    "name": "座りポーズ 001",
-    "file": "sitting_001.json",
-    "tags": [
-      "座り",
-      "正面"
-    ],
-    "thumbnail": null
-  },
-  {
-    "id": "standing_side_001",
-    "name": "立ちポーズ 005（横向き）",
-    "file": "standing_side_001.json",
-    "tags": [
-      "立ち",
-      "横向き"
-    ],
-    "thumbnail": null
-  },
-  {
-    "id": "lying_001",
-    "name": "寝ポーズ 001",
-    "file": "lying_001.json",
-    "tags": [
-      "寝る",
-      "正面"
-    ],
-    "thumbnail": null
-  },
-  {
     "id": "start_walking_001",
-    "name": "Start Walking 1",
+    "name": "歩き 1",
     "file": "start_walking_001.json",
     "tags": [
       "歩き"
@@ -81,17 +9,8 @@
     "thumbnail": null
   },
   {
-    "id": "start_walking_002",
-    "name": "Start Walking 2",
-    "file": "start_walking_002.json",
-    "tags": [
-      "歩き"
-    ],
-    "thumbnail": null
-  },
-  {
     "id": "start_walking_003",
-    "name": "Start Walking 3",
+    "name": "歩き 2",
     "file": "start_walking_003.json",
     "tags": [
       "歩き"
@@ -100,7 +19,7 @@
   },
   {
     "id": "idle_001",
-    "name": "Idle",
+    "name": "立ちポーズ（自然体）",
     "file": "idle_001.json",
     "tags": [
       "立ち"
@@ -109,28 +28,215 @@
   },
   {
     "id": "female_standing_pose2_001",
-    "name": "Female Standing Pose2",
+    "name": "立ち 1",
     "file": "female_standing_pose2_001.json",
     "tags": [
-      "standing"
+      "立ち"
     ],
     "thumbnail": null
   },
   {
     "id": "female_standing_pose3_001",
-    "name": "Female Standing Pose3",
+    "name": "立ち 2",
     "file": "female_standing_pose3_001.json",
     "tags": [
-      "standing"
+      "立ち"
     ],
+    "hidden": true,
     "thumbnail": null
   },
   {
     "id": "walking_left_turn_001",
-    "name": "Walking Left Turn",
+    "name": "歩き 4",
     "file": "walking_left_turn_001.json",
     "tags": [
-      "Walking"
+      "歩き"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "female_standing_pose_001",
+    "name": "歩き 5",
+    "file": "female_standing_pose_001.json",
+    "tags": [
+      "立ち"
+    ],
+    "hidden": true,
+    "thumbnail": null
+  },
+  {
+    "id": "crazy_gesture_001",
+    "name": "立ち 6",
+    "file": "crazy_gesture_001.json",
+    "tags": [
+      "立ち"
+    ],
+    "hidden": true,
+    "thumbnail": null
+  },
+  {
+    "id": "pose_001",
+    "name": "立ち 7",
+    "file": "pose_001.json",
+    "tags": [
+      "アクション"
+    ],
+    "hidden": true,
+    "thumbnail": null
+  },
+  {
+    "id": "male_sitting_pose_001",
+    "name": "Male Sitting Pose",
+    "file": "male_sitting_pose_001.json",
+    "tags": [
+      "座り"
+    ],
+    "hidden": true,
+    "thumbnail": null
+  },
+  {
+    "id": "female_action_pose_001",
+    "name": "Female Action Pose",
+    "file": "female_action_pose_001.json",
+    "tags": [
+      "アクション"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "female_action_pose1_001",
+    "name": "Female Action Pose1",
+    "file": "female_action_pose1_001.json",
+    "tags": [
+      "アクション"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "female_action_pose2_001",
+    "name": "Female Action Pose2",
+    "file": "female_action_pose2_001.json",
+    "tags": [
+      "アクション"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "female_dance_pose_001",
+    "name": "Female Dance Pose",
+    "file": "female_dance_pose_001.json",
+    "tags": [
+      "アクション",
+      "ダンス"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "male_action_pose_001",
+    "name": "Male Action Pose",
+    "file": "male_action_pose_001.json",
+    "tags": [
+      "アクション"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "male_crouch_pose_001",
+    "name": "Male Crouch Pose",
+    "file": "male_crouch_pose_001.json",
+    "tags": [
+      "アクション",
+      "しゃがみ"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "male_locomotion_pose_001",
+    "name": "Male Locomotion Pose",
+    "file": "male_locomotion_pose_001.json",
+    "tags": [
+      "歩き"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "male_locomotion_pose1_001",
+    "name": "Male Locomotion Pose1",
+    "file": "male_locomotion_pose1_001.json",
+    "tags": [
+      "歩き"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "female_dynamic_pose_001",
+    "name": "Female Dynamic Pose",
+    "file": "female_dynamic_pose_001.json",
+    "tags": [
+      "ジャンプ"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "male_dynamic_pose_001",
+    "name": "Male Dynamic Pose",
+    "file": "male_dynamic_pose_001.json",
+    "tags": [
+      "ジャンプ"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "male_action_pose3_001",
+    "name": "Male Action Pose3",
+    "file": "male_action_pose3_001.json",
+    "tags": [
+      "アクション"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "fighting_idle_001",
+    "name": "Fighting Idle",
+    "file": "fighting_idle_001.json",
+    "tags": [
+      "アクション"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "hook_001",
+    "name": "Hook",
+    "file": "hook_001.json",
+    "tags": [
+      "Action"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "strike_foward_jog_001",
+    "name": "Strike Foward Jog",
+    "file": "strike_foward_jog_001.json",
+    "tags": [
+      "Action"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "baseball_idle_1_001",
+    "name": "Baseball Idle (1)",
+    "file": "baseball_idle_1_001.json",
+    "tags": [
+      "Sports"
+    ],
+    "thumbnail": null
+  },
+  {
+    "id": "baseball_idle_001",
+    "name": "Baseball Idle",
+    "file": "baseball_idle_001.json",
+    "tags": [
+      "Sports"
     ],
     "thumbnail": null
   }

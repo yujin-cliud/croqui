@@ -554,24 +554,31 @@ function createLimbBone(
     0.01
   );
 
-  const mesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(
-      radius,
-      radius * MANNEQUIN_DIMENSIONS.limbTaperRatio,
-      meshLength,
-      10
-    ),
-    material
-  );
+  const radiusBottom = radius * MANNEQUIN_DIMENSIONS.limbTaperRatio;
 
-  // 棒の開始位置を付け根側の隙間ぶん下げる
-  mesh.position.y = -(startGap + meshLength / 2);
+  // 直線の円柱ではなく、中央がふくらむ紡錘形(スピンドル)にして丸みを出す。
+  // 上端(y=0)→下端(y=-meshLength)の輪郭を回転体(Lathe)にする。両端は平らなフタ付き。
+  const BULGE = 0.12; // 中央のふくらみ量(0=円柱と同じ / 上げると樽型で丸く)
+  const SEG = 14;
+  const profile: THREE.Vector2[] = [new THREE.Vector2(0, 0)]; // 上フタの中心
+  for (let i = 0; i <= SEG; i++) {
+    const t = i / SEG;                                  // 0=上, 1=下
+    const base = radius + (radiusBottom - radius) * t;  // 直線テーパ
+    const round = 1 + BULGE * Math.sin(Math.PI * t);    // 中央で最大にふくらむ
+    profile.push(new THREE.Vector2(base * round, -meshLength * t));
+  }
+  profile.push(new THREE.Vector2(0, -meshLength));      // 下フタの中心
 
+  const limbMaterial = (material as THREE.MeshStandardMaterial).clone();
+  limbMaterial.side = THREE.DoubleSide;
+  const mesh = new THREE.Mesh(new THREE.LatheGeometry(profile, 16), limbMaterial);
+  mesh.position.y = -startGap;                          // 上端を付け根側の隙間ぶん下げる
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   bone.add(mesh);
 
   return bone;
+
 }
 
 export function createMannequin(): MannequinModel {
@@ -637,11 +644,47 @@ export function createMannequin(): MannequinModel {
   neckMesh.castShadow = true;
   head.add(neckMesh);
 
-  const headMesh = new THREE.Mesh(new THREE.SphereGeometry(d.headRadius, 16, 12), bodyMaterial);
-  headMesh.position.y = d.headRadius;
+  // 頭は skull グループにまとめ、非一様スケールで卵型(楕円)にする。
+  // 顔の十字(縦=顔の中心線 / 横=目のライン)も skull 内に入れ、同じスケールで
+  // 頭表面にピタッと沿わせる(顔の向きが分かる目印)。前方向 = +Z。
+  const skull = new THREE.Group();
+  skull.position.y = d.headRadius;            // 頭の中心
+  skull.scale.set(0.9, 1.15, 1.02);           // x=やや細く / y=縦長 / z=わずかに前後長 → 卵型
+  head.add(skull);
+
+  const headMesh = new THREE.Mesh(new THREE.SphereGeometry(d.headRadius, 24, 18), bodyMaterial);
   headMesh.castShadow = true;
   headMesh.receiveShadow = true;
-  head.add(headMesh);
+  skull.add(headMesh);
+
+  // 顔の十字(前面 +Z のみ・表面のわずか外側に沿わせる)
+  const faceLineMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3520, roughness: 0.75 });
+  const rSurf = d.headRadius * 1.006;         // 表面のちょい外(めり込み/チラつき防止)
+  const tubeR = d.headRadius * 0.05;
+  const faceArc = (pts: THREE.Vector3[]) => {
+    const m = new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, tubeR, 6, false),
+      faceLineMaterial,
+    );
+    m.castShadow = true;
+    return m;
+  };
+  // 縦線: 前面の子午線(下→前→上)
+  const vPts: THREE.Vector3[] = [];
+  for (let i = 0; i <= 24; i++) {
+    const a = THREE.MathUtils.degToRad(-78 + (156 * i) / 24);
+    vPts.push(new THREE.Vector3(0, rSurf * Math.sin(a), rSurf * Math.cos(a)));
+  }
+  skull.add(faceArc(vPts));
+  // 横線: 目のライン(前面の水平半円・中心よりわずか下)
+  const hy = -d.headRadius * 0.12;
+  const hr = Math.sqrt(Math.max(0, rSurf * rSurf - hy * hy));
+  const hPts: THREE.Vector3[] = [];
+  for (let i = 0; i <= 24; i++) {
+    const b = THREE.MathUtils.degToRad(-70 + (140 * i) / 24);
+    hPts.push(new THREE.Vector3(hr * Math.sin(b), hy, hr * Math.cos(b)));
+  }
+  skull.add(faceArc(hPts));
 
   // Arms
   const sides: Array<{ side: Side; sign: 1 | -1 }> = [

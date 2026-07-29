@@ -1,8 +1,8 @@
 {
   "id": "walking_left_turn_001",
-  "name": "Walking Left Turn",
+  "name": "歩き 4",
   "tags": [
-    "Walking"
+    "歩き"
   ],
   "bones": {
     "hips": {

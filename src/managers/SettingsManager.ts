@@ -26,6 +26,11 @@ export class SettingsManager {
       defaultTimer: partial.defaultTimer ?? current.defaultTimer,
       autoNext: partial.autoNext ?? current.autoNext,
       showGrid: partial.showGrid ?? current.showGrid,
+      lightAzimuth: partial.lightAzimuth ?? current.lightAzimuth,
+      lightElevation: partial.lightElevation ?? current.lightElevation,
+      lightIntensity: partial.lightIntensity ?? current.lightIntensity,
+      ambientIntensity: partial.ambientIntensity ?? current.ambientIntensity,
+      cameraFov: partial.cameraFov ?? current.cameraFov,
     };
 
     this.applyToStores(next);

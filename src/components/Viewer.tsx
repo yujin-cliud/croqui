@@ -1,9 +1,26 @@
 import { Canvas } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
+import { useEffect } from 'react';
 import { ViewerEngine } from '../viewer/ViewerEngine';
 import { useViewerStore } from '../stores/ViewerStore';
+import { useSettingsStore } from '../stores/SettingsStore';
 import { VIEWER_CAMERA } from '../constants/viewer';
 import { viewerManager } from '../managers/ViewerManager';
 import { TimerWidget } from './TimerWidget';
+
+// storeのcameraFovを実カメラに反映する(Canvasのcamera propは初回のみ効くため、
+// 変更を毎回projectionMatrixに適用する小コンポーネントをCanvas内に置く)。
+function FovController() {
+  const camera = useThree((state) => state.camera);
+  const cameraFov = useSettingsStore((state) => state.cameraFov);
+  useEffect(() => {
+    if ('fov' in camera) {
+      camera.fov = cameraFov;
+      camera.updateProjectionMatrix();
+    }
+  }, [camera, cameraFov]);
+  return null;
+}
 
 // UIは表示と操作受付のみを行う。Three.js自体の操作はviewer層(ViewerEngine)に閉じ込める。
 export function Viewer() {
@@ -21,6 +38,7 @@ export function Viewer() {
           position: [VIEWER_CAMERA.position[0], VIEWER_CAMERA.position[1], VIEWER_CAMERA.position[2]],
         }}
       >
+        <FovController />
         <ViewerEngine />
       </Canvas>
 

@@ -10,15 +10,17 @@ import { TagSearchPanel } from './TagSearchPanel';
 // UIは表示と操作受付のみで、実処理は各Manager経由で行う。
 export function ControlPanel() {
   const [isTagSearchOpen, setTagSearchOpen] = useState(false);
+  const poses = usePoseStore((state) => state.poses);
   const currentPose = usePoseStore((state) => state.currentPose);
   const favoriteIds = useFavoriteStore((state) => state.favoriteIds);
-
   const isFavorite = currentPose ? favoriteIds.includes(currentPose.id) : false;
-
+  const displayName = currentPose
+    ? poses.find((p) => p.id === currentPose.id)?.name ?? currentPose.name
+    : 'ポーズ未読み込み';
   return (
     <section className="control-panel">
       <div className="control-panel-info">
-        <span>{currentPose?.name ?? 'ポーズ未読み込み'}</span>
+        <span>{displayName}</span>
       </div>
 
       <div className="control-panel-buttons">
