@@ -109,7 +109,7 @@ export function CameraController() {
       maxDistance={VIEWER_CAMERA.maxDistance}
       zoomSpeed={VIEWER_CAMERA.zoomSpeed}
       mouseButtons={{ LEFT: MOUSE.ROTATE, MIDDLE: MOUSE.PAN, RIGHT: MOUSE.PAN }}
-      maxPolarAngle={Math.PI * 0.49}
+      maxPolarAngle={Math.PI * 0.95}
       enableDamping
       dampingFactor={0.08}
       onStart={handleInteractionStart}
