@@ -3,8 +3,6 @@ import type { Pose } from '../types/Pose';
 import type { BoneName } from '../types/Pose';
 import type { BoneMap } from './BoneMapper';
 
-// 手足のボーンはローカル -Y 方向へ伸びる(ModelLoader の createLimbBone と同じ規約)。
-const DOWN = new THREE.Vector3(0, -1, 0);
 type Side = 'L' | 'R';
 
 // 足首(footボーン原点)をこの高さに置くと足の裏が床(y=0)に接する。footHeight相当・調整可。
@@ -71,6 +69,10 @@ function solveLegIK(boneMap: BoneMap, side: Side, target: THREE.Vector3): void {
 
   const L1 = lowerLeg.position.length(); // 股→膝(太もも)
   const L2 = foot.position.length();     // 膝→足首(すね)
+  // 各ボーンのバインド姿勢での「親→子」方向(リグにより -Y とは限らないため、
+  // 子ボーンのローカル位置から実際の方向を都度求める)
+  const upperLegAim = lowerLeg.position.clone().normalize();
+  const lowerLegAim = foot.position.clone().normalize();
 
   const S = upperLeg.getWorldPosition(new THREE.Vector3());        // 股関節
   const kneeHint = lowerLeg.getWorldPosition(new THREE.Vector3()); // FK膝(pole)
@@ -92,16 +94,16 @@ function solveLegIK(boneMap: BoneMap, side: Side, target: THREE.Vector3): void {
 
   const knee = S.clone().addScaledVector(n, a).addScaledVector(pole, h);
 
-  // 太もも: ローカル -Y を 股→膝 に向ける
+  // 太もも: バインド時の「股→膝」方向を 股→膝(IK) に向ける
   const dir1 = knee.clone().sub(S).normalize();
-  const q1 = new THREE.Quaternion().setFromUnitVectors(DOWN, dir1);
+  const q1 = new THREE.Quaternion().setFromUnitVectors(upperLegAim, dir1);
   const parentInv = parent.getWorldQuaternion(new THREE.Quaternion()).invert();
   upperLeg.quaternion.copy(parentInv.multiply(q1));
   upperLeg.updateWorldMatrix(true, false);
 
-  // すね: ローカル -Y を 膝→target に向ける
+  // すね: バインド時の「膝→足首」方向を 膝→target に向ける
   const dir2 = target.clone().sub(knee).normalize();
-  const q2 = new THREE.Quaternion().setFromUnitVectors(DOWN, dir2);
+  const q2 = new THREE.Quaternion().setFromUnitVectors(lowerLegAim, dir2);
   const upperInv = upperLeg.getWorldQuaternion(new THREE.Quaternion()).invert();
   lowerLeg.quaternion.copy(upperInv.multiply(q2));
   lowerLeg.updateWorldMatrix(true, false);

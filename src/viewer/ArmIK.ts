@@ -3,8 +3,6 @@ import type { Pose } from '../types/Pose';
 import type { BoneName } from '../types/Pose';
 import type { BoneMap } from './BoneMapper';
 
-// 手足のボーンはローカル -Y 方向へ伸びる(ModelLoader の createLimbBone と同じ規約)。
-const DOWN = new THREE.Vector3(0, -1, 0);
 type Side = 'L' | 'R';
 
 // pose.ik の型。import-mixamo が接触ポーズにだけ焼く、手首IKの目標点(hipsローカル・マネキン尺)。
@@ -49,6 +47,10 @@ export function applyArmIK(boneMap: BoneMap, pose: Pose): void {
     // 骨の長さ(肩→肘 / 肘→手首)をリグから取得
     const L1 = lowerArm.position.length();
     const L2 = hand.position.length();
+    // 各ボーンのバインド姿勢での「親→子」方向(リグにより -Y とは限らないため、
+    // 子ボーンのローカル位置から実際の方向を都度求める)
+    const upperArmAim = lowerArm.position.clone().normalize();
+    const lowerArmAim = hand.position.clone().normalize();
 
     // 目標を hips ローカル → ワールドへ
     const T = hips.localToWorld(new THREE.Vector3(target[0], target[1], target[2]));
@@ -76,16 +78,16 @@ export function applyArmIK(boneMap: BoneMap, pose: Pose): void {
 
     const elbow = S.clone().addScaledVector(n, a).addScaledVector(pole, h);
 
-    // --- 上腕: ローカル -Y を S→肘 に向ける ---
+    // --- 上腕: バインド時の「肩→肘」方向を S→肘 に向ける ---
     const dir1 = elbow.clone().sub(S).normalize();
-    const q1 = new THREE.Quaternion().setFromUnitVectors(DOWN, dir1);
+    const q1 = new THREE.Quaternion().setFromUnitVectors(upperArmAim, dir1);
     const parentWorldInv = parent.getWorldQuaternion(new THREE.Quaternion()).invert();
     upperArm.quaternion.copy(parentWorldInv.multiply(q1));
     upperArm.updateWorldMatrix(true, false);
 
-    // --- 前腕: ローカル -Y を 肘→T に向ける ---
+    // --- 前腕: バインド時の「肘→手首」方向を 肘→T に向ける ---
     const dir2 = T.clone().sub(elbow).normalize();
-    const q2 = new THREE.Quaternion().setFromUnitVectors(DOWN, dir2);
+    const q2 = new THREE.Quaternion().setFromUnitVectors(lowerArmAim, dir2);
     const upperWorldInv = upperArm.getWorldQuaternion(new THREE.Quaternion()).invert();
     lowerArm.quaternion.copy(upperWorldInv.multiply(q2));
     lowerArm.updateWorldMatrix(true, false);
