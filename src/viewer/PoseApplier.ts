@@ -1,24 +1,29 @@
+import * as THREE from 'three';
 import type { Pose } from '../types/Pose';
 import type { BoneMap } from './BoneMapper';
 import { BONE_NAMES } from '../types/Pose';
 import { applyFootIK } from './FootIK';
 import { applyArmIK } from './ArmIK';
 
+const IDENTITY_QUATERNION = new THREE.Quaternion();
+
 // BoneMapに対してPoseの回転値を書き込むだけの純粋な処理。
-// Pose JSONに含まれないボーンは初期姿勢（回転0）に戻し、常に一貫した見た目にする。
+// 各ボーンの「バインド(レスト)姿勢」からの相対回転として適用する(bind × delta)。
+// プリミティブ版マネキンは全ボーンのバインド回転が恒等なのでdeltaがそのまま最終回転になり
+// 従来の挙動と変わらない。バインド回転が非恒等なGLBリグでも正しく重ね合わせられる。
+// Pose JSONに含まれないボーンはバインド姿勢(delta=恒等)に戻し、常に一貫した見た目にする。
 // 角度(FK)を当てたあと、足を床に接地(FootIK)→腰などの手接触(ArmIK)の順で補正する。
 export function applyPose(boneMap: BoneMap, pose: Pose): void {
   for (const boneName of BONE_NAMES) {
     const bone = boneMap[boneName];
     if (!bone) continue;
 
+    const bind = (bone.userData.bind as THREE.Quaternion | undefined) ?? IDENTITY_QUATERNION;
     const boneData = pose.bones[boneName];
-    if (boneData) {
-      const [x, y, z] = boneData.rotation;
-      bone.rotation.set(x, y, z);
-    } else {
-      bone.rotation.set(0, 0, 0);
-    }
+    const delta = boneData
+      ? new THREE.Quaternion().setFromEuler(new THREE.Euler(...boneData.rotation))
+      : IDENTITY_QUATERNION;
+    bone.quaternion.copy(bind).multiply(delta);
   }
 
   // 足の接地補正を先に(体全体の上下シフトを含むため)、そのあと手の接触IK。

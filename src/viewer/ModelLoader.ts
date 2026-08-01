@@ -18,6 +18,48 @@ const GLB_MODEL_URL = `${import.meta.env.BASE_URL}models/mannequin.glb`;
 // メッシュ形状はすでに実寸(全高約1.7m)で書き出されている
 // (tools/import-mixamo/.tmp/check-scene-tree.mjsで確認済み)。
 
+// croqui_body_rig_v1.glb(Auto-Rig Pro「Universal」デフォームボーン書き出し)の
+// 実ボーン名 → Croquiの16ボーンへの対応(role-basedで検証済み)。
+// GLTFLoaderはノード名からピリオドを除去するため(例: "root.x" → "rootx")、
+// 元のglTF上の名前ではなくロード後の実際の名前で対応させる。
+// spine_02x/neckx/各*twist/指ボーンはCroquiの16ボーンに含まれないため未使用。
+const GLB_BONE_NAME_MAP: Record<BoneName, string> = {
+  hips: 'rootx',
+  spine: 'spine_01x',
+  chest: 'spine_03x',
+  head: 'headx',
+  upperArm_L: 'arm_stretchl',
+  lowerArm_L: 'forearm_stretchl',
+  hand_L: 'handl',
+  upperArm_R: 'arm_stretchr',
+  lowerArm_R: 'forearm_stretchr',
+  hand_R: 'handr',
+  upperLeg_L: 'thigh_stretchl',
+  lowerLeg_L: 'leg_stretchl',
+  foot_L: 'footl',
+  upperLeg_R: 'thigh_stretchr',
+  lowerLeg_R: 'leg_stretchr',
+  foot_R: 'footr',
+};
+
+// GLBの実ボーン名からCroquiのボーン名を逆引きし、該当ノードに`userData.bone`を
+// 立てる。BoneMapperはこのタグだけを見て収集するため、モデル固有の名前対応は
+// ここに閉じ込め、BoneMapper自体はモデル非依存のまま保つ。
+function tagGLBBones(root: THREE.Object3D): void {
+  const nameToBoneName = new Map<string, BoneName>(
+    (Object.entries(GLB_BONE_NAME_MAP) as Array<[BoneName, string]>).map(([boneName, glbName]) => [
+      glbName,
+      boneName,
+    ]),
+  );
+  root.traverse((object) => {
+    const boneName = nameToBoneName.get(object.name);
+    if (boneName) {
+      object.userData.bone = boneName;
+    }
+  });
+}
+
 // 以下はプリミティブ生成版(旧実装)。Three.jsのプリミティブ形状を組み合わせて
 // デッサン用の木製アーティストマネキンを生成する。各関節はTHREE.Groupとして表現し、
 // `userData.bone`にPose JSONと対応するボーン名を持たせることで、BoneMapperが
@@ -850,12 +892,16 @@ function loadMannequinPrimitive(): Promise<MannequinModel> {
   });
 }
 
-// GLB版マネキンの読み込み。ボーンへの`userData.bone`タグ付けはまだ行っておらず、
-// BoneMapperは空のBoneMapを返す(ポーズ・IKは次ステップで対応)。
+// GLB版マネキンの読み込み。GLB_BONE_NAME_MAPに基づき`userData.bone`をタグ付けし、
+// BoneMapperが既存のプリミティブ版と同じ仕組みでボーンを収集できるようにする。
 function loadMannequinGLB(): Promise<MannequinModel> {
   return new GLTFLoader()
     .loadAsync(GLB_MODEL_URL)
-    .then((gltf) => ({ root: gltf.scene }))
+    .then((gltf) => {
+      const root = gltf.scene;
+      tagGLBBones(root);
+      return { root };
+    })
     .catch((error: unknown) => {
       throw error instanceof Error ? error : new Error('モデルの読み込みに失敗しました');
     });
