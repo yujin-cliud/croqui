@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MANNEQUIN_DIMENSIONS, MANNEQUIN_COLOR, MANNEQUIN_JOINT_COLOR, TOE_SCALES } from '../constants/mannequin';
 import type { BoneName } from '../types/Pose';
 
@@ -8,10 +9,19 @@ export type MannequinModel = {
 
 type Side = 'L' | 'R';
 
-// 配布物にモデル資産（glTF等）が含まれていないため、Three.jsのプリミティブ形状を
-// 組み合わせてデッサン用の木製アーティストマネキンを生成する。
-// 各関節はTHREE.Groupとして表現し、`userData.bone`にPose JSONと対応する
-// ボーン名を持たせることで、BoneMapperが後から機械的に収集できるようにする。
+// GLB作り替え作業中の切り替えフラグ(model-loader-glbブランチ)。
+// GLB版の動作が安定確認できたら、この分岐とプリミティブ生成コードを削除する。
+const USE_GLB_MANNEQUIN = true;
+
+const GLB_MODEL_URL = `${import.meta.env.BASE_URL}models/mannequin.glb`;
+// スケール調整は不要: GLB内のArmatureノード自体がscale=0.01を持ち、
+// メッシュ形状はすでに実寸(全高約1.7m)で書き出されている
+// (tools/import-mixamo/.tmp/check-scene-tree.mjsで確認済み)。
+
+// 以下はプリミティブ生成版(旧実装)。Three.jsのプリミティブ形状を組み合わせて
+// デッサン用の木製アーティストマネキンを生成する。各関節はTHREE.Groupとして表現し、
+// `userData.bone`にPose JSONと対応するボーン名を持たせることで、BoneMapperが
+// 後から機械的に収集できるようにする。
 
 function createJointSphere(radius: number, material: THREE.Material): THREE.Mesh {
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 12, 10), material);
@@ -826,10 +836,10 @@ export function createMannequin(): MannequinModel {
   return { root };
 }
 
-// Viewerからは非同期のロードとして扱う。実際は同期生成だが、将来glTF等の
-// 実ファイル読み込みに差し替えても呼び出し側のインターフェースが変わらないようにするため、
-// また失敗時の再読み込みUI（docs/05, docs/12）と挙動を揃えるためPromise化している。
-export function loadMannequin(): Promise<MannequinModel> {
+// プリミティブ生成は同期処理だが、将来glTF等の実ファイル読み込みに差し替えても
+// 呼び出し側のインターフェースが変わらないようにするため、また失敗時の再読み込みUI
+// （docs/05, docs/12）と挙動を揃えるためPromise化している。
+function loadMannequinPrimitive(): Promise<MannequinModel> {
   return new Promise((resolve, reject) => {
     try {
       const model = createMannequin();
@@ -838,4 +848,19 @@ export function loadMannequin(): Promise<MannequinModel> {
       reject(error instanceof Error ? error : new Error('モデルの読み込みに失敗しました'));
     }
   });
+}
+
+// GLB版マネキンの読み込み。ボーンへの`userData.bone`タグ付けはまだ行っておらず、
+// BoneMapperは空のBoneMapを返す(ポーズ・IKは次ステップで対応)。
+function loadMannequinGLB(): Promise<MannequinModel> {
+  return new GLTFLoader()
+    .loadAsync(GLB_MODEL_URL)
+    .then((gltf) => ({ root: gltf.scene }))
+    .catch((error: unknown) => {
+      throw error instanceof Error ? error : new Error('モデルの読み込みに失敗しました');
+    });
+}
+
+export function loadMannequin(): Promise<MannequinModel> {
+  return USE_GLB_MANNEQUIN ? loadMannequinGLB() : loadMannequinPrimitive();
 }
