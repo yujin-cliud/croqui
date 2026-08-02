@@ -146,11 +146,11 @@ function findBone(skeleton, shortName) {
 }
 
 /** レスト時ワールドXで Mixamo の Left/Right → マネキンの _L(-X)/_R(+X) を決める */
-function resolveSides(skeleton, restWorld) {
-  const leftArmX = restWorld[findBone(skeleton, 'LeftArm')].position.x;
-  const rightArmX = restWorld[findBone(skeleton, 'RightArm')].position.x;
-  // マネキンの _R は +X 側。Mixamo 側で +X にある方を R に割り当てる
-  return leftArmX > rightArmX ? { R: 'Left', L: 'Right' } : { R: 'Right', L: 'Left' };
+function resolveSides() {
+  // ARPリグは解剖学的に素直な対応(hand_R ← RightHand)。MX_BONEも全ボーン
+  // Left→_L / Right→_R で写しているため、接触検出も同じ対応で測る。
+  // (旧・木製マネキンは _R=+X の空間対応で Left/Right を入れ替えていた)
+  return { L: 'Left', R: 'Right' };
 }
 
 const DOWN = new THREE.Vector3(0, -1, 0); // マネキンの手足はローカル -Y 方向に伸びる
@@ -174,6 +174,37 @@ const ARP_BIND_WORLD = {
   upperLeg_R: [0.735120, -0.013826, -0.677766, -0.006384],
   lowerLeg_R: [0.734885, 0.023169, -0.676587, -0.040468],
   foot_R: [-0.039662, 0.526549, 0.848863, 0.024602],
+  // 指(実GLB実測値)
+  thumb1_L: [-0.173445, 0.323687, 0.819848, -0.439309],
+  thumb2_L: [-0.137928, 0.253163, 0.840846, -0.458108],
+  thumb3_L: [-0.183899, 0.350034, 0.813118, -0.427195],
+  index1_L: [0.531686, 0.484580, 0.575015, -0.389680],
+  index2_L: [0.566322, 0.442440, 0.571837, -0.395637],
+  index3_L: [0.565747, 0.443230, 0.571114, -0.396618],
+  middle1_L: [0.553729, 0.460027, 0.534734, -0.442515],
+  middle2_L: [0.583421, 0.419588, 0.556752, -0.416645],
+  middle3_L: [0.576203, 0.429339, 0.566010, -0.404093],
+  ring1_L: [0.599843, 0.397563, 0.496710, -0.485191],
+  ring2_L: [0.612224, 0.376014, 0.531468, -0.448706],
+  ring3_L: [0.599221, 0.397274, 0.527427, -0.452690],
+  pinky1_L: [-0.633559, -0.340527, -0.468098, 0.513350],
+  pinky2_L: [0.636285, 0.333676, 0.500110, -0.483417],
+  pinky3_L: [0.626170, 0.352811, 0.503507, -0.479496],
+  thumb1_R: [0.173445, 0.323687, 0.819848, 0.439308],
+  thumb2_R: [0.137928, 0.253163, 0.840846, 0.458108],
+  thumb3_R: [0.183899, 0.350034, 0.813118, 0.427195],
+  index1_R: [-0.531686, 0.484580, 0.575015, 0.389680],
+  index2_R: [-0.566322, 0.442440, 0.571837, 0.395637],
+  index3_R: [-0.565747, 0.443230, 0.571114, 0.396618],
+  middle1_R: [0.553729, -0.460027, -0.534734, -0.442515],
+  middle2_R: [0.583421, -0.419588, -0.556752, -0.416645],
+  middle3_R: [0.576203, -0.429339, -0.566010, -0.404093],
+  ring1_R: [0.599843, -0.397563, -0.496710, -0.485191],
+  ring2_R: [0.612224, -0.376014, -0.531468, -0.448707],
+  ring3_R: [0.599221, -0.397274, -0.527427, -0.452690],
+  pinky1_R: [-0.633559, 0.340527, 0.468098, 0.513350],
+  pinky2_R: [0.636285, -0.333676, -0.500110, -0.483417],
+  pinky3_R: [0.626170, -0.352811, -0.503507, -0.479496],
 };
 const arpBindWorld = (role) => new THREE.Quaternion(...ARP_BIND_WORLD[role]);
 
@@ -184,6 +215,17 @@ const MX_BONE = {
   upperArm_R: 'RightArm', lowerArm_R: 'RightForeArm', hand_R: 'RightHand',
   upperLeg_L: 'LeftUpLeg',  lowerLeg_L: 'LeftLeg',  foot_L: 'LeftFoot',
   upperLeg_R: 'RightUpLeg', lowerLeg_R: 'RightLeg', foot_R: 'RightFoot',
+  // 指
+  thumb1_L: 'LeftHandThumb1', thumb2_L: 'LeftHandThumb2', thumb3_L: 'LeftHandThumb3',
+  index1_L: 'LeftHandIndex1', index2_L: 'LeftHandIndex2', index3_L: 'LeftHandIndex3',
+  middle1_L: 'LeftHandMiddle1', middle2_L: 'LeftHandMiddle2', middle3_L: 'LeftHandMiddle3',
+  ring1_L: 'LeftHandRing1', ring2_L: 'LeftHandRing2', ring3_L: 'LeftHandRing3',
+  pinky1_L: 'LeftHandPinky1', pinky2_L: 'LeftHandPinky2', pinky3_L: 'LeftHandPinky3',
+  thumb1_R: 'RightHandThumb1', thumb2_R: 'RightHandThumb2', thumb3_R: 'RightHandThumb3',
+  index1_R: 'RightHandIndex1', index2_R: 'RightHandIndex2', index3_R: 'RightHandIndex3',
+  middle1_R: 'RightHandMiddle1', middle2_R: 'RightHandMiddle2', middle3_R: 'RightHandMiddle3',
+  ring1_R: 'RightHandRing1', ring2_R: 'RightHandRing2', ring3_R: 'RightHandRing3',
+  pinky1_R: 'RightHandPinky1', pinky2_R: 'RightHandPinky2', pinky3_R: 'RightHandPinky3',
 };
 // 腕のレスト差補正用: idle FBX(Tポーズ)の腕レスト回転。
 const MIXAMO_TPOSE_REST = {
@@ -208,6 +250,17 @@ const ARP_PARENT = {
   upperArm_R: 'shoulder_R', lowerArm_R: 'upperArm_R', hand_R: 'lowerArm_R',
   upperLeg_L: 'hips', lowerLeg_L: 'upperLeg_L', foot_L: 'lowerLeg_L',
   upperLeg_R: 'hips', lowerLeg_R: 'upperLeg_R', foot_R: 'lowerLeg_R',
+  // 指(role階層。GLBの*_base中手骨は未駆動でバインド維持=role親hand換算で整合)
+  thumb1_L: 'hand_L', thumb2_L: 'thumb1_L', thumb3_L: 'thumb2_L',
+  index1_L: 'hand_L', index2_L: 'index1_L', index3_L: 'index2_L',
+  middle1_L: 'hand_L', middle2_L: 'middle1_L', middle3_L: 'middle2_L',
+  ring1_L: 'hand_L', ring2_L: 'ring1_L', ring3_L: 'ring2_L',
+  pinky1_L: 'hand_L', pinky2_L: 'pinky1_L', pinky3_L: 'pinky2_L',
+  thumb1_R: 'hand_R', thumb2_R: 'thumb1_R', thumb3_R: 'thumb2_R',
+  index1_R: 'hand_R', index2_R: 'index1_R', index3_R: 'index2_R',
+  middle1_R: 'hand_R', middle2_R: 'middle1_R', middle3_R: 'middle2_R',
+  ring1_R: 'hand_R', ring2_R: 'ring1_R', ring3_R: 'ring2_R',
+  pinky1_R: 'hand_R', pinky2_R: 'pinky1_R', pinky3_R: 'pinky2_R',
 };
 
 /**
@@ -229,10 +282,15 @@ function solveFrame(skeleton, restWorld, animWorld /* sides は未使用 */) {
       .multiply(restQ.clone().invert());
     targetWorld[role] = mxDelta.multiply(arpBindWorld(role));
   }
-  // 肩(shoulder)は動きが繊細で、delta=なで肩/aim=怒り肩になるため、
-  // バインド姿勢のまま固定する(人間の肩は立ち・歩きではほぼ動かない)。
-  targetWorld.shoulder_L = arpBindWorld('shoulder_L');
-  targetWorld.shoulder_R = arpBindWorld('shoulder_R');
+  // 肩は胴(chest)に自然に追従させる(クラビクルの上下動は付けない)。
+  // ワールド固定だと胴がねじれたポーズで肩が置いていかれ、その"置いていかれ"が
+  // 上腕の見かけ上のねじれ(candy-wrapper)の正体だった。胴追従にすると上腕ねじれは
+  // ほぼ0になり、肩の潰れ・なで肩・裂けが同時に解消する。follow調整は不要。
+  for (const side of ['L', 'R']) {
+    const key = `shoulder_${side}`;
+    const bindLocalSh = arpBindWorld('chest').clone().invert().multiply(arpBindWorld(key));
+    targetWorld[key] = targetWorld['chest'].clone().multiply(bindLocalSh);
+  }
   // 手のひらのロール補正: ARPとMixamoの手ボーンの軸差で手のひらが正面を向くため、
   // 前腕の軸(ローカルY)まわりに補正回転を掛ける。角度は実機で調整する。
   const PALM_ROLL_DEG = 45; // ← 実機で調整する値(90→-90→180などを試す)
@@ -248,6 +306,49 @@ function solveFrame(skeleton, restWorld, animWorld /* sides は未使用 */) {
     targetWorld[`hand_${side}`] = targetWorld[`lowerArm_${side}`].clone()
       .multiply(wristLocal).multiply(palmRoll(sign));
   }
+  // 指: 方向ベース(aim)リターゲット。Mixamoの各指節の「向き」を手ローカルで取り、
+  // 解剖学的な手の基底対応 M(実測定数)でARPの手ローカルへ写し、指ボーンの+Yを
+  // その方向へ向ける(ロールは親から継承)。フレーム規約差の影響を受けず、
+  // 拳の曲がり角がMixamoとほぼ一致する(実測誤差0〜3°)。
+  const FINGER_M = {
+    L: new THREE.Quaternion(0.043585, -0.999013, 0.002957, 0.007988),
+    R: new THREE.Quaternion(0.038067, 0.999142, 0.007200, 0.014617),
+  };
+  const FINGERS = [['thumb', 'Thumb'], ['index', 'Index'], ['middle', 'Middle'], ['ring', 'Ring'], ['pinky', 'Pinky']];
+  const PLUS_Y_AXIS = new THREE.Vector3(0, 1, 0);
+  for (const side of ['L', 'R']) {
+    const Side = side === 'L' ? 'Left' : 'Right';
+    const handRole = `hand_${side}`;
+    const mxHandInv = animWorld[B(`${Side}Hand`)].quaternion.clone().invert();
+    for (const [fg, Fg] of FINGERS) {
+      let parentRole = handRole;
+      for (let j = 1; j <= 3; j++) {
+        const role = `${fg}${j}_${side}`;
+        // 「親に剛体追従」した場合の姿勢(ロールの基準)
+        const baseline = targetWorld[parentRole].clone()
+          .multiply(arpBindWorld(parentRole).clone().invert())
+          .multiply(arpBindWorld(role));
+        // Mixamoの指節方向(手ローカル)→ ARP手ローカル(M)→ ワールド。
+        // 古いFBX(52ボーン)は指先tipボーンが無いことがある→その節は親に追従。
+        let next = -1;
+        try { next = B(`${Side}Hand${Fg}${j + 1}`); } catch { /* tipなし */ }
+        if (next < 0) {
+          targetWorld[role] = baseline;
+        } else {
+          const cur = B(`${Side}Hand${Fg}${j}`);
+          const dir = animWorld[next].position.clone().sub(animWorld[cur].position)
+            .normalize().applyQuaternion(mxHandInv)
+            .applyQuaternion(FINGER_M[side])
+            .applyQuaternion(targetWorld[handRole]);
+          const y0 = PLUS_Y_AXIS.clone().applyQuaternion(baseline);
+          const arc = new THREE.Quaternion().setFromUnitVectors(y0, dir);
+          targetWorld[role] = arc.multiply(baseline);
+        }
+        parentRole = role;
+      }
+    }
+  }
+
   // // 腕はレスト差が大きい(Mixamo=水平/ARP=斜め下)ので、delta方式だと開きすぎる。
   // // 肩→肘・肘→手首のワールド方向にARP腕ボーンの+Y軸を向けるaim方式で上書きする。
   // // (ARPの腕ボーンは+Y方向に伸びる。ひねりは捨てるがクロッキーでは問題ない)
@@ -272,6 +373,7 @@ function solveFrame(skeleton, restWorld, animWorld /* sides は未使用 */) {
     const bindLocal = parentBindWorld.clone().invert().multiply(arpBindWorld(role));
 
     const delta = bindLocal.clone().invert().multiply(localTarget);
+    if (delta.w < 0) { delta.x *= -1; delta.y *= -1; delta.z *= -1; delta.w *= -1; }
     eulers[role] = new THREE.Euler().setFromQuaternion(delta, 'XYZ');
   }
 
@@ -311,15 +413,15 @@ function solveFrame(skeleton, restWorld, animWorld /* sides は未使用 */) {
  *     mannequin.ts を変えたら下も合わせ、`npm run import:poses -- --force` で焼き直す。
  * ============================================================== */
 const MANNEQUIN = {
-  hipsToHead: 0.55,        // hips原点→頭のおおよその縦長。Mixamo体長との正規化スケール合わせ用
-  handRadius: 0.055,       // handRadius … 手首をこのぶん表面から離すと手のひらが面に乗る
-  // 下胴の断面半径。低い所(骨盤)は広く、高い所(腰くびれ)は細い。高さで補間する。
-  pelvisHalfWidth: 0.15,   // = pelvisBottomWidth(0.30) / 2
-  pelvisHalfDepth: 0.035,  // = pelvisDepth(0.07) / 2
-  waistHalfWidth: 0.085,   // = bellyWidth(0.17) / 2
-  waistHalfDepth: 0.0375,  // = bellyDepth(0.075) / 2
-  // 骨盤↔腰くびれの補間に使う hips ローカルの高さ(マネキン尺)
-  pelvisY: -0.05,
+  // ★ ARP解剖学ボディ(mannequin.glb)の実測値。メッシュ断面から採寸(rootxローカル)。
+  hipsToHead: 0.657,       // rootx(hips)→headx のバインド距離。Mixamo体長との正規化スケール合わせ用
+  handRadius: 0.04,        // 手首をこのぶん表面から離すと手のひらが面に乗る
+  // 下胴の断面半径。低い所(骨盤)は広く、高い所(腰)は細い。高さで補間する。
+  pelvisHalfWidth: 0.178,  // y=0.00 実測 |x|max
+  pelvisHalfDepth: 0.148,  // y=0.00 実測 |z|max
+  waistHalfWidth: 0.153,   // y=0.20 実測 |x|max
+  waistHalfDepth: 0.138,   // y=0.20 実測 |z|max
+  pelvisY: 0.00,
   waistY: 0.20,
 };
 // 接触判定のしきい値(実データで較正。ラベル付きポーズが増えたら要再調整)。
@@ -448,12 +550,33 @@ async function main() {
     const dir = path.join(SRC_DIR, tagDir);
 
     for (const fbx of fs.readdirSync(dir).filter((f) => /\.fbx$/i.test(f))) {
-      const baseName = path.basename(fbx, path.extname(fbx));
+      // ファイル名の "@〜" サフィックスでそのFBXのサンプリングを指定できる。
+      //   "Walking@4.fbx"       → 均等に4ポーズ(名前は "Walking 1"〜"Walking 4")
+      //   "Jump@40%.fbx"        → アニメの40%地点の瞬間だけを1ポーズ切り出し
+      //   "Kick@25%,60%,90%.fbx"→ 指定した複数地点をそれぞれ切り出し
+      // %の位置はMixamoプレビューのシークバーでおおよそを掴む。指定なしは --frames(デフォルト1=中間)。
+      const rawName = path.basename(fbx, path.extname(fbx));
+      const fm = rawName.match(/^(.*?)\s*@([\d.,%\s]+)$/);
+      const baseName = fm ? fm[1].trim() : rawName;
+      let frames = FRAMES;
+      let percents = null; // 例: [40] や [25,60,90]
+      if (fm) {
+        const spec = fm[2].trim();
+        if (spec.includes('%')) {
+          percents = spec.split(',')
+            .map((x) => parseFloat(x))
+            .filter((x) => Number.isFinite(x))
+            .map((x) => Math.min(100, Math.max(0, x)));
+          if (percents.length === 0) percents = null;
+        } else {
+          frames = Math.max(1, parseInt(spec, 10) || 1);
+        }
+      }
       const firstId = toId(baseName, 1);
 
       // 差分ビルド: 1フレーム目の JSON があればスキップ
       if (!FORCE && byId.has(firstId) && fs.existsSync(path.join(POSES_DIR, `${firstId}.json`))) {
-        skipped += FRAMES;
+        skipped += percents ? percents.length : frames;
         continue;
       }
 
@@ -468,19 +591,32 @@ async function main() {
         const sides = resolveSides(skeleton, restWorld);
 
         // FRAMES=1 は中間フレーム、複数なら両端を少し避けて均等サンプリング
-        const times = FRAMES === 1
-          ? [skeleton.duration / 2]
-          : Array.from({ length: FRAMES }, (_, k) => (skeleton.duration * (k + 0.5)) / FRAMES);
+        const times = percents
+          ? percents.map((p) => (skeleton.duration * p) / 100)
+          : frames === 1
+            ? [skeleton.duration / 2]
+            : Array.from({ length: frames }, (_, k) => (skeleton.duration * (k + 0.5)) / frames);
 
         times.forEach((t, k) => {
           const animWorld = computeWorld(skeleton, t);
           const eulers = solveFrame(skeleton, restWorld, animWorld, sides);
-          const contacts = {}; // TODO: ARP寸法に合わせて再有効化するまで一旦オフ
+          const contacts = solveHandContacts(skeleton, animWorld, sides); // ARP実測寸法で有効化済み
+          // 空中ポーズの自動判定: Mixamoのアニメは床=y0基準なので、低い方の足首の高さが
+          // 脚長の25%を超えていたら空中姿勢(ジャンプ等)とみなし、接地補正(FootIK)を自動オフ。
+          // (レスト姿勢は一部FBXで足が地中にあるなど信用できないため参照しない)
+          const airborne = (() => {
+            const B2 = (nm) => findBone(skeleton, nm);
+            const legLen =
+              animWorld[B2('LeftUpLeg')].position.distanceTo(animWorld[B2('LeftLeg')].position) +
+              animWorld[B2('LeftLeg')].position.distanceTo(animWorld[B2('LeftFoot')].position);
+            const animLowest = Math.min(animWorld[B2('LeftFoot')].position.y, animWorld[B2('RightFoot')].position.y);
+            return legLen > 1e-6 && animLowest / legLen > 0.25;
+          })();
           const id = toId(baseName, k + 1);
           const existing = byId.get(id);
           const pose = {
             id,
-            name: existing?.name ?? (FRAMES === 1 ? baseName : `${baseName} ${k + 1}`),
+            name: existing?.name ?? (times.length === 1 ? baseName : `${baseName} ${k + 1}`),
             tags: existing?.tags ?? tags,
             bones: eulersToPoseBones(eulers),
           };
@@ -495,6 +631,10 @@ async function main() {
             } catch {
               // 既存JSONが壊れていても無視して新規に焼く
             }
+          }
+          if (airborne && !pose.noFootIk) {
+            pose.noFootIk = true;
+            console.log(`\n  ↳ 空中ポーズ検出 [${id}]: noFootIk を自動設定`);
           }
           // 接触があれば手首IKの目標点を焼く(なければ ik 自体を出さない=従来ポーズと同一形式)
           if (Object.keys(contacts).length) {
@@ -522,9 +662,16 @@ async function main() {
     }
   }
 
-  fs.writeFileSync(INDEX_PATH, JSON.stringify([...byId.values()], null, 2) + '\n');
+  // 索引の掃除: ポーズJSONが存在しないエントリは除去する(FBX削除や @N を減らした後の残骸対策)。
+  // hidden:true のエントリはJSONがある限り残る(隠しただけで消えない)。
+  const entries = [...byId.values()].filter((p) => {
+    const ok = fs.existsSync(path.join(POSES_DIR, `${p.id}.json`));
+    if (!ok) console.log(`索引から除去(JSONなし): ${p.id}`);
+    return ok;
+  });
+  fs.writeFileSync(INDEX_PATH, JSON.stringify(entries, null, 2) + '\n');
   fs.rmSync(TMP_DIR, { recursive: true, force: true });
-  console.log(`\n完了: 追加 ${added} / スキップ ${skipped} / 合計 ${byId.size} ポーズ(うち接触 ${contactCount} 手)`);
+  console.log(`\n完了: 追加 ${added} / スキップ ${skipped} / 合計 ${entries.length} ポーズ(うち接触 ${contactCount} 手)`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

@@ -29,6 +29,6 @@ export function applyPose(boneMap: BoneMap, pose: Pose): void {
   }
 
   // 足の接地補正を先に(体全体の上下シフトを含むため)、そのあと手の接触IK。
-  // applyFootIK(boneMap, pose);
-  // applyArmIK(boneMap, pose);
+  applyFootIK(boneMap, pose);
+  applyArmIK(boneMap, pose);
 }
