@@ -248,5 +248,14 @@
       "Walking"
     ],
     "thumbnail": null
+  },
+  {
+    "id": "defeated_001",
+    "name": "Defeated",
+    "file": "defeated_001.json",
+    "tags": [
+      "pose"
+    ],
+    "thumbnail": null
   }
 ]
