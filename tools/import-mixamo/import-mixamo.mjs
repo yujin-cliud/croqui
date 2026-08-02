@@ -181,7 +181,14 @@ const MX_BONE = {
   upperLeg_L: 'LeftUpLeg',  lowerLeg_L: 'LeftLeg',  foot_L: 'LeftFoot',
   upperLeg_R: 'RightUpLeg', lowerLeg_R: 'RightLeg', foot_R: 'RightFoot',
 };
-
+// 腕のレスト差補正用: idle FBX(Tポーズ)の腕レスト回転。
+const MIXAMO_TPOSE_REST = {
+  upperArm_L: [-0.5097, -0.4403,  0.5851, -0.4517],
+  lowerArm_L: [0.4814,  0.4637, -0.5076,  0.5437],
+  hand_L:     [-0.4950, -0.4756,  0.5695, -0.4521],
+  upperArm_R: [0.5078, -0.4435,  0.5867,  0.4487],
+  lowerArm_R: [0.4833, -0.4618,  0.5057,  0.5453],
+  };
 /**
  * 1フレーム分のリターゲットを解く。
  * 返り値: { boneName: THREE.Euler(XYZ) } — PoseApplier がそのまま適用できるローカル回転
@@ -206,9 +213,28 @@ function solveFrame(skeleton, restWorld, animWorld /* sides は未使用 */) {
   const targetWorld = {};
   for (const role of Object.keys(ARP_PARENT)) {
     const i = B(MX_BONE[role]);
+    // 腕は各FBX固有レストだとAポーズ差で開くため、共通Tポーズレストを使う。
+    const restQ = MIXAMO_TPOSE_REST[role]
+      ? new THREE.Quaternion(...MIXAMO_TPOSE_REST[role])
+      : restWorld[i].quaternion;
     const mxDelta = animWorld[i].quaternion.clone()
-      .multiply(restWorld[i].quaternion.clone().invert());
+      .multiply(restQ.clone().invert());
     targetWorld[role] = mxDelta.multiply(arpBindWorld(role));
+  }
+  // 手のひらのロール補正: ARPとMixamoの手ボーンの軸差で手のひらが正面を向くため、
+  // 前腕の軸(ローカルY)まわりに補正回転を掛ける。角度は実機で調整する。
+  const PALM_ROLL_DEG = 45; // ← 実機で調整する値(90→-90→180などを試す)
+  const palmRoll = (sign) => new THREE.Quaternion().setFromAxisAngle(
+    new THREE.Vector3(0, 1, 0), sign * PALM_ROLL_DEG * Math.PI / 180);
+  for (const side of ['L', 'R']) {
+    const fore = side === 'L' ? 'LeftForeArm' : 'RightForeArm';
+    const hand = side === 'L' ? 'LeftHand' : 'RightHand';
+    const wristLocal = animWorld[B(fore)].quaternion.clone().invert()
+      .multiply(animWorld[B(hand)].quaternion);
+    // 左右で回転方向が逆になるので sign を分ける
+    const sign = side === 'L' ? 1 : -1;
+    targetWorld[`hand_${side}`] = targetWorld[`lowerArm_${side}`].clone()
+      .multiply(wristLocal).multiply(palmRoll(sign));
   }
   // // 腕はレスト差が大きい(Mixamo=水平/ARP=斜め下)ので、delta方式だと開きすぎる。
   // // 肩→肘・肘→手首のワールド方向にARP腕ボーンの+Y軸を向けるaim方式で上書きする。

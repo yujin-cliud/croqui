@@ -9,15 +9,6 @@
     "thumbnail": null
   },
   {
-    "id": "start_walking_003",
-    "name": "歩き 2",
-    "file": "start_walking_003.json",
-    "tags": [
-      "歩き"
-    ],
-    "thumbnail": null
-  },
-  {
     "id": "idle_001",
     "name": "立ちポーズ（自然体）",
     "file": "idle_001.json",
