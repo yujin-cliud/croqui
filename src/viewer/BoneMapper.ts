@@ -5,8 +5,10 @@ export type BoneMap = Partial<Record<BoneName, THREE.Object3D>>;
 
 // ModelLoaderが構築した階層を走査し、`userData.bone`にボーン名を持つノードだけを
 // 集めてBoneMapを作る。PoseApplierはこのマップを介してのみボーンへアクセスする。
-// この時点(ポーズ適用前)のクォータニオンを`userData.bind`(ローカル)と
-// `userData.bindWorld`(ワールド、bind×delta方式が破綻するfoot系のみが使用)に保存する。
+// この時点(ポーズ適用前)のクォータニオンを`userData.bind`(ローカル、PoseApplierの
+// bind×deltaが使用)と`userData.bindWorld`(ワールド、FootIKが接地足の向きを
+// 幾何学的に決め直す際、「甲の上方向/つま先方向」をバインド姿勢から逆算するのに使用)
+// に保存する。
 export function buildBoneMap(root: THREE.Object3D): BoneMap {
   const boneMap: BoneMap = {};
 

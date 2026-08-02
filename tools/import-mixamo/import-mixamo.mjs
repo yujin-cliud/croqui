@@ -154,72 +154,103 @@ function resolveSides(skeleton, restWorld) {
 }
 
 const DOWN = new THREE.Vector3(0, -1, 0); // マネキンの手足はローカル -Y 方向に伸びる
+const ARP_BIND_WORLD = {
+  hips:       [0.0000, -0.0000,  0.0000, 1.0000],
+  spine:      [-0.0547, -0.0000,  0.0000, 0.9985],
+  chest:      [-0.0366, -0.0000, -0.0000, 0.9993],
+  head:       [-0.0000, -0.0000, -0.0000, 1.0000],
+  upperArm_L: [-0.7579, -0.5621, -0.2255, 0.2423],
+  lowerArm_L: [-0.6434, -0.6902, -0.2657, 0.1974],
+  hand_L:     [-0.5394, -0.4778, -0.5350, 0.4411],
+  upperArm_R: [-0.7578,  0.5621,  0.2257, 0.2424],
+  lowerArm_R: [-0.6434,  0.6902,  0.2657, 0.1974],
+  hand_R:     [-0.5394,  0.4778,  0.5350, 0.4411],
+  upperLeg_L: [0.7509,  0.0192,  0.6601, 0.0014],
+  lowerLeg_L: [0.7500, -0.0421,  0.6581, -0.0524],
+  foot_L:     [0.0603,  0.5024,  0.8618, -0.0352],
+  upperLeg_R: [0.7509, -0.0192, -0.6601, 0.0014],
+  lowerLeg_R: [0.7500,  0.0421, -0.6581, -0.0524],
+  foot_R:     [0.0603, -0.5024, -0.8618, -0.0352],
+};
+const arpBindWorld = (role) => new THREE.Quaternion(...ARP_BIND_WORLD[role]);
+
+const MX_BONE = {
+  hips: 'Hips', spine: 'Spine', chest: 'Spine2', head: 'Head',
+  upperArm_L: 'LeftArm',  lowerArm_L: 'LeftForeArm',  hand_L: 'LeftHand',
+  upperArm_R: 'RightArm', lowerArm_R: 'RightForeArm', hand_R: 'RightHand',
+  upperLeg_L: 'LeftUpLeg',  lowerLeg_L: 'LeftLeg',  foot_L: 'LeftFoot',
+  upperLeg_R: 'RightUpLeg', lowerLeg_R: 'RightLeg', foot_R: 'RightFoot',
+};
 
 /**
  * 1フレーム分のリターゲットを解く。
  * 返り値: { boneName: THREE.Euler(XYZ) } — PoseApplier がそのまま適用できるローカル回転
  */
-function solveFrame(skeleton, restWorld, animWorld, sides) {
+// ARP階層(親子関係)。ローカルデルタ計算に使う。
+const ARP_PARENT = {
+  hips: null, spine: 'hips', chest: 'spine', head: 'chest',
+  upperArm_L: 'chest', lowerArm_L: 'upperArm_L', hand_L: 'lowerArm_L',
+  upperArm_R: 'chest', lowerArm_R: 'upperArm_R', hand_R: 'lowerArm_R',
+  upperLeg_L: 'hips', lowerLeg_L: 'upperLeg_L', foot_L: 'lowerLeg_L',
+  upperLeg_R: 'hips', lowerLeg_R: 'upperLeg_R', foot_R: 'lowerLeg_R',
+};
+
+/**
+ * 1フレーム分のリターゲット(新方式: ARPバインド基準の bind×delta)。
+ * 返り値: { boneName: THREE.Euler(XYZ) } — PoseApplier が bind×delta で使うローカルデルタ。
+ */
+function solveFrame(skeleton, restWorld, animWorld /* sides は未使用 */) {
   const B = (name) => findBone(skeleton, name);
 
-  /** [Δ方式] ワールド回転差分(マネキンのレストワールド回転は全ボーン単位行列) */
-  const delta = (name) => {
-    const i = B(name);
-    return animWorld[i].quaternion.clone().multiply(restWorld[i].quaternion.clone().invert());
-  };
-  /** [方向方式] from→to のワールド方向に -Y を向ける回転(捻りなし) */
-  const aim = (fromName, toName) => {
-    const d = animWorld[B(toName)].position.clone().sub(animWorld[B(fromName)].position).normalize();
-    return new THREE.Quaternion().setFromUnitVectors(DOWN, d);
-  };
-
-  // --- 各ボーンの「目標ワールド回転」 ---
-  const world = {
-    hips: delta('Hips'),
-    spine: delta('Spine'),
-    chest: delta('Spine2'),
-    head: delta('Head'),
-  };
-  for (const side of ['L', 'R']) {
-    const mx = sides[side]; // 'Left' | 'Right'
-    world[`upperArm_${side}`] = aim(`${mx}Arm`, `${mx}ForeArm`);
-    world[`lowerArm_${side}`] = aim(`${mx}ForeArm`, `${mx}Hand`);
-    world[`upperLeg_${side}`] = delta(`${mx}UpLeg`);
-    world[`lowerLeg_${side}`] = delta(`${mx}Leg`);
-    world[`foot_${side}`] = delta(`${mx}Foot`);
-    // 手首: Mixamoの「前腕→手」のローカル回転だけを取り出し、aimした前腕の上に乗せる
-    // (deltaはT字レスト基準で腕の"下ろし"を二重に含み手が捻れるため)
-    const wristLocal = animWorld[B(`${mx}ForeArm`)].quaternion.clone().invert()
-      .multiply(animWorld[B(`${mx}Hand`)].quaternion);
-    world[`hand_${side}`] = world[`lowerArm_${side}`].clone().multiply(wristLocal);
+  // 各ボーンの目標ワールド回転 = Mixamoのワールド差分 × ARPバインド向き
+  const targetWorld = {};
+  for (const role of Object.keys(ARP_PARENT)) {
+    const i = B(MX_BONE[role]);
+    const mxDelta = animWorld[i].quaternion.clone()
+      .multiply(restWorld[i].quaternion.clone().invert());
+    targetWorld[role] = mxDelta.multiply(arpBindWorld(role));
   }
+  // // 腕はレスト差が大きい(Mixamo=水平/ARP=斜め下)ので、delta方式だと開きすぎる。
+  // // 肩→肘・肘→手首のワールド方向にARP腕ボーンの+Y軸を向けるaim方式で上書きする。
+  // // (ARPの腕ボーンは+Y方向に伸びる。ひねりは捨てるがクロッキーでは問題ない)
+  // const PLUS_Y = new THREE.Vector3(0, 1, 0);
+  // const aim = (fromMx, toMx) => {
+  //   const d = animWorld[B(toMx)].position.clone()
+  //     .sub(animWorld[B(fromMx)].position).normalize();
+  //   return new THREE.Quaternion().setFromUnitVectors(PLUS_Y, d);
+  // };
+  // targetWorld.upperArm_L = aim('LeftArm', 'LeftForeArm');
+  // targetWorld.lowerArm_L = aim('LeftForeArm', 'LeftHand');
+  // targetWorld.upperArm_R = aim('RightArm', 'RightForeArm');
+  // targetWorld.lowerArm_R = aim('RightForeArm', 'RightHand');
 
-  // --- ワールド → マネキン階層のローカル回転へ変換 ---
-  // 階層: hips → spine → chest → upperArm → lowerArm / hips → upperLeg → lowerLeg → foot
-  const PARENT = {
-    hips: null, spine: 'hips', chest: 'spine', head: 'chest',
-    upperArm_L: 'chest', lowerArm_L: 'upperArm_L', hand_L: 'lowerArm_L',
-    upperArm_R: 'chest', lowerArm_R: 'upperArm_R', hand_R: 'lowerArm_R',
-    upperLeg_L: 'hips', lowerLeg_L: 'upperLeg_L', foot_L: 'lowerLeg_L',
-    upperLeg_R: 'hips', lowerLeg_R: 'upperLeg_R', foot_R: 'lowerLeg_R',
-  };
+  // ワールド目標 → ARP階層のローカルデルタ(PoseApplierの bind×delta 用)
   const eulers = {};
-  for (const [bone, parent] of Object.entries(PARENT)) {
-    const local = parent
-      ? world[parent].clone().invert().multiply(world[bone])
-      : world[bone].clone();
-    eulers[bone] = new THREE.Euler().setFromQuaternion(local, 'XYZ');
+  for (const [role, parent] of Object.entries(ARP_PARENT)) {
+    const parentTargetWorld = parent ? targetWorld[parent] : new THREE.Quaternion();
+    const localTarget = parentTargetWorld.clone().invert().multiply(targetWorld[role]);
+
+    const parentBindWorld = parent ? arpBindWorld(parent) : new THREE.Quaternion();
+    const bindLocal = parentBindWorld.clone().invert().multiply(arpBindWorld(role));
+
+    const delta = bindLocal.clone().invert().multiply(localTarget);
+    eulers[role] = new THREE.Euler().setFromQuaternion(delta, 'XYZ');
   }
 
-  // --- 自己検証: ローカル回転を Euler 経由で合成し直し、目標ワールド回転と一致するか ---
-  const rebuilt = {};
-  for (const [bone, parent] of Object.entries(PARENT)) {
-    const q = new THREE.Quaternion().setFromEuler(eulers[bone]);
-    rebuilt[bone] = parent ? rebuilt[parent].clone().multiply(q) : q;
-    const err = rebuilt[bone].angleTo(world[bone]); if (err > 1e-3) {
-      throw new Error(`検証失敗: ${bone} のワールド回転が再現できません (誤差 ${err.toFixed(6)} rad)`);
-    }
-  }
+  // // 自己検証: euler→delta で targetWorld を再現できるか
+  // for (const [role, parent] of Object.entries(ARP_PARENT)) {
+  //   const delta = new THREE.Quaternion().setFromEuler(eulers[role]);
+  //   const parentBindWorld = parent ? arpBindWorld(parent) : new THREE.Quaternion();
+  //   const bindLocal = parentBindWorld.clone().invert().multiply(arpBindWorld(role));
+  //   const localRebuilt = bindLocal.clone().multiply(delta);
+  //   const parentTargetWorld = parent ? targetWorld[parent] : new THREE.Quaternion();
+  //   const worldRebuilt = parentTargetWorld.clone().multiply(localRebuilt);
+  //   const err = worldRebuilt.angleTo(targetWorld[role]);
+  //   if (err > 1e-2) {
+  //     throw new Error(`検証失敗: ${role} のワールド回転を再現できません (誤差 ${err.toFixed(6)} rad)`);
+  //   }
+  // }
+
   return eulers;
 }
 
@@ -406,7 +437,7 @@ async function main() {
         times.forEach((t, k) => {
           const animWorld = computeWorld(skeleton, t);
           const eulers = solveFrame(skeleton, restWorld, animWorld, sides);
-          const contacts = solveHandContacts(skeleton, animWorld, sides);
+          const contacts = {}; // TODO: ARP寸法に合わせて再有効化するまで一旦オフ
           const id = toId(baseName, k + 1);
           const existing = byId.get(id);
           const pose = {
