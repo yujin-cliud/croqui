@@ -155,49 +155,57 @@ function resolveSides(skeleton, restWorld) {
 
 const DOWN = new THREE.Vector3(0, -1, 0); // マネキンの手足はローカル -Y 方向に伸びる
 const ARP_BIND_WORLD = {
-  hips:       [0.0000, -0.0000,  0.0000, 1.0000],
-  spine:      [-0.0547, -0.0000,  0.0000, 0.9985],
-  chest:      [-0.0366, -0.0000, -0.0000, 0.9993],
-  head:       [-0.0000, -0.0000, -0.0000, 1.0000],
-  upperArm_L: [-0.7579, -0.5621, -0.2255, 0.2423],
-  lowerArm_L: [-0.6434, -0.6902, -0.2657, 0.1974],
-  hand_L:     [-0.5394, -0.4778, -0.5350, 0.4411],
-  upperArm_R: [-0.7578,  0.5621,  0.2257, 0.2424],
-  lowerArm_R: [-0.6434,  0.6902,  0.2657, 0.1974],
-  hand_R:     [-0.5394,  0.4778,  0.5350, 0.4411],
-  upperLeg_L: [0.7509,  0.0192,  0.6601, 0.0014],
-  lowerLeg_L: [0.7500, -0.0421,  0.6581, -0.0524],
-  foot_L:     [0.0603,  0.5024,  0.8618, -0.0352],
-  upperLeg_R: [0.7509, -0.0192, -0.6601, 0.0014],
-  lowerLeg_R: [0.7500,  0.0421, -0.6581, -0.0524],
-  foot_R:     [0.0603, -0.5024, -0.8618, -0.0352],
+  hips: [0.000000, -0.000001, 0.000000, 1.000000],
+  spine: [-0.048077, 0.000000, 0.000000, 0.998844],
+  chest: [-0.037888, -0.000000, -0.000000, 0.999282],
+  head: [0.000000, -0.000000, -0.000000, 1.000000],
+  neck: [0.174305, -0.000000, -0.000000, 0.984692],
+  shoulder_L: [0.500481, 0.500481, 0.499518, -0.499518],
+  shoulder_R: [-0.500481, 0.500481, 0.499518, 0.499518],
+  upperArm_L: [0.748948, 0.557089, 0.241883, -0.264995],
+  lowerArm_L: [0.632084, 0.686872, 0.286943, -0.215268],
+  hand_L: [0.541011, 0.475351, 0.533459, -0.443587],
+  upperArm_R: [0.748967, -0.557110, -0.241822, -0.264950],
+  lowerArm_R: [-0.632084, 0.686872, 0.286943, 0.215268],
+  hand_R: [0.541011, -0.475351, -0.533459, -0.443587],
+  upperLeg_L: [0.735120, 0.013826, 0.677766, -0.006384],
+  lowerLeg_L: [0.734885, -0.023169, 0.676587, -0.040468],
+  foot_L: [0.039662, 0.526549, 0.848863, -0.024602],
+  upperLeg_R: [0.735120, -0.013826, -0.677766, -0.006384],
+  lowerLeg_R: [0.734885, 0.023169, -0.676587, -0.040468],
+  foot_R: [-0.039662, 0.526549, 0.848863, 0.024602],
 };
 const arpBindWorld = (role) => new THREE.Quaternion(...ARP_BIND_WORLD[role]);
 
 const MX_BONE = {
   hips: 'Hips', spine: 'Spine', chest: 'Spine2', head: 'Head',
-  upperArm_L: 'LeftArm',  lowerArm_L: 'LeftForeArm',  hand_L: 'LeftHand',
+  neck: 'Neck', shoulder_L: 'LeftShoulder', shoulder_R: 'RightShoulder',
+  upperArm_L: 'LeftArm', lowerArm_L: 'LeftForeArm', hand_L: 'LeftHand',
   upperArm_R: 'RightArm', lowerArm_R: 'RightForeArm', hand_R: 'RightHand',
   upperLeg_L: 'LeftUpLeg',  lowerLeg_L: 'LeftLeg',  foot_L: 'LeftFoot',
   upperLeg_R: 'RightUpLeg', lowerLeg_R: 'RightLeg', foot_R: 'RightFoot',
 };
 // 腕のレスト差補正用: idle FBX(Tポーズ)の腕レスト回転。
 const MIXAMO_TPOSE_REST = {
-  upperArm_L: [-0.5097, -0.4403,  0.5851, -0.4517],
-  lowerArm_L: [0.4814,  0.4637, -0.5076,  0.5437],
-  hand_L:     [-0.4950, -0.4756,  0.5695, -0.4521],
-  upperArm_R: [0.5078, -0.4435,  0.5867,  0.4487],
-  lowerArm_R: [0.4833, -0.4618,  0.5057,  0.5453],
-  };
+  shoulder_L: [-0.5264, -0.4192, 0.5800, -0.4590],
+  shoulder_R: [0.5282, -0.4178, 0.5784, 0.4603],
+  upperArm_L: [-0.5097, -0.4403, 0.5851, -0.4517],
+  lowerArm_L: [0.4814, 0.4637, -0.5076, 0.5437],
+  hand_L:     [-0.4950, -0.4756, 0.5695, -0.4521],
+  upperArm_R: [0.5078, -0.4435, 0.5867, 0.4487],
+  lowerArm_R: [0.4833, -0.4618, 0.5057, 0.5453],
+  hand_R:     [0.4891, -0.4680, 0.5781, 0.4557],
+};
 /**
  * 1フレーム分のリターゲットを解く。
  * 返り値: { boneName: THREE.Euler(XYZ) } — PoseApplier がそのまま適用できるローカル回転
  */
 // ARP階層(親子関係)。ローカルデルタ計算に使う。
 const ARP_PARENT = {
-  hips: null, spine: 'hips', chest: 'spine', head: 'chest',
-  upperArm_L: 'chest', lowerArm_L: 'upperArm_L', hand_L: 'lowerArm_L',
-  upperArm_R: 'chest', lowerArm_R: 'upperArm_R', hand_R: 'lowerArm_R',
+  hips: null, spine: 'hips', chest: 'spine', head: 'neck',
+  neck: 'chest', shoulder_L: 'chest', shoulder_R: 'chest',
+  upperArm_L: 'shoulder_L', lowerArm_L: 'upperArm_L', hand_L: 'lowerArm_L',
+  upperArm_R: 'shoulder_R', lowerArm_R: 'upperArm_R', hand_R: 'lowerArm_R',
   upperLeg_L: 'hips', lowerLeg_L: 'upperLeg_L', foot_L: 'lowerLeg_L',
   upperLeg_R: 'hips', lowerLeg_R: 'upperLeg_R', foot_R: 'lowerLeg_R',
 };
@@ -221,6 +229,10 @@ function solveFrame(skeleton, restWorld, animWorld /* sides は未使用 */) {
       .multiply(restQ.clone().invert());
     targetWorld[role] = mxDelta.multiply(arpBindWorld(role));
   }
+  // 肩(shoulder)は動きが繊細で、delta=なで肩/aim=怒り肩になるため、
+  // バインド姿勢のまま固定する(人間の肩は立ち・歩きではほぼ動かない)。
+  targetWorld.shoulder_L = arpBindWorld('shoulder_L');
+  targetWorld.shoulder_R = arpBindWorld('shoulder_R');
   // 手のひらのロール補正: ARPとMixamoの手ボーンの軸差で手のひらが正面を向くため、
   // 前腕の軸(ローカルY)まわりに補正回転を掛ける。角度は実機で調整する。
   const PALM_ROLL_DEG = 45; // ← 実機で調整する値(90→-90→180などを試す)
