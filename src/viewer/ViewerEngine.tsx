@@ -6,12 +6,10 @@ import { usePoseStore } from '../stores/PoseStore';
 import { loadMannequin } from './ModelLoader';
 import { buildBoneMap, type BoneMap } from './BoneMapper';
 import { applyPose } from './PoseApplier';
-import { applyLineArt } from './LineArt';
 import { Lighting } from './Lighting';
 import { Grid } from './Grid';
 import { Environment } from './Environment';
 import { CameraController } from './CameraController';
-import { LineArtEffect } from './LineArtEffect';
 
 // Scene全体の組み立て（マネキン生成・ボーン収集・ポーズ適用・照明・グリッド・
 // 背景・カメラ）を担当する。Three.js操作はviewer層に閉じ込め、
@@ -19,7 +17,6 @@ import { LineArtEffect } from './LineArtEffect';
 export function ViewerEngine() {
   const [root, setRoot] = useState<THREE.Group | null>(null);
   const boneMapRef = useRef<BoneMap>({});
-  const lineArtMode = useSettingsStore((state) => state.lineArtMode);
   const reloadToken = useViewerStore((state) => state.reloadToken);
   const setModelLoading = useViewerStore((state) => state.setModelLoading);
   const setViewerError = useViewerStore((state) => state.setViewerError);
@@ -58,10 +55,6 @@ export function ViewerEngine() {
     if (!root || !currentPose) return;
     applyPose(boneMapRef.current, currentPose);
     }, [root, currentPose]);
-  useEffect(() => {
-    if (!root) return;
-    applyLineArt(root, lineArtMode);
-    }, [root, lineArtMode]);
   return (
     <>
       <Environment />
@@ -69,7 +62,6 @@ export function ViewerEngine() {
       <Grid />
       {root && <primitive object={root} />}
       <CameraController />
-      <LineArtEffect />
     </>
   );
 }

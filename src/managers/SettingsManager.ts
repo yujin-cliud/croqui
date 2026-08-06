@@ -29,7 +29,6 @@ export class SettingsManager {
       defaultTimer: partial.defaultTimer ?? current.defaultTimer,
       autoNext: partial.autoNext ?? current.autoNext,
       showGrid: partial.showGrid ?? current.showGrid,
-      lineArtMode: partial.lineArtMode ?? current.lineArtMode ?? false,
       lightAzimuth: partial.lightAzimuth ?? current.lightAzimuth,
       lightElevation: partial.lightElevation ?? current.lightElevation,
       lightIntensity: partial.lightIntensity ?? current.lightIntensity,

@@ -29,7 +29,6 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const ambientIntensity = useSettingsStore((state) => state.ambientIntensity);
   const cameraFov = useSettingsStore((state) => state.cameraFov);
   const modelId = useSettingsStore((state) => state.modelId);
-  const lineArtMode = useSettingsStore((state) => state.lineArtMode);
   const [models, setModels] = useState<ModelInfo[]>([]);
   useEffect(() => {
     void loadModelList().then(setModels);
@@ -75,17 +74,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             </label>
           ))}
         </fieldset>
-<fieldset className="settings-group">
-          <legend>表示</legend>
-          <label className="settings-checkbox">
-            <input
-              type="checkbox"
-              checked={lineArtMode}
-              onChange={(event) => void settingsManager.update({ lineArtMode: event.target.checked })}
-            />
-            線画モード（輪郭線＋ベタ塗り）
-          </label>
-        </fieldset>
+
         <fieldset className="settings-group">
           <legend>グリッド</legend>
           <label className="settings-checkbox">

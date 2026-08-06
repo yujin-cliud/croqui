@@ -8,7 +8,6 @@ export type Settings = {
   defaultTimer: number;
   autoNext: boolean;
   showGrid: boolean;
-  lineArtMode: boolean; // 線画モード(トゥーン+輪郭線)
   lightAzimuth: number;    // 光の方位角(度) 0=正面, 90=右横, 180=真後ろ(逆光)
   lightElevation: number;  // 光の高度(度) 10=低い(影長い) 〜 90=真上
   lightIntensity: number;  // 主光の強さ
@@ -22,7 +21,6 @@ export const defaultSettings: Settings = {
   defaultTimer: DEFAULT_TIMER_SECONDS,
   autoNext: true,
   showGrid: true,
-  lineArtMode: false,
   lightAzimuth: 40,
   lightElevation: 55,
   lightIntensity: 1.1,
