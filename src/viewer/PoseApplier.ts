@@ -4,6 +4,7 @@ import type { BoneMap } from './BoneMapper';
 import { BONE_NAMES } from '../types/Pose';
 import { applyFootIK } from './FootIK';
 import { applyArmIK } from './ArmIK';
+import { applyBendSmoothing } from './Bendsmoother';
 
 const IDENTITY_QUATERNION = new THREE.Quaternion();
 
@@ -29,6 +30,7 @@ export function applyPose(boneMap: BoneMap, pose: Pose): void {
   }
 
   // 足の接地補正を先に(体全体の上下シフトを含むため)、そのあと手の接触IK。
+  applyBendSmoothing(boneMap);
   applyFootIK(boneMap, pose);
   applyArmIK(boneMap, pose);
 }

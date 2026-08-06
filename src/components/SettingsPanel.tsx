@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { useSettingsStore } from '../stores/SettingsStore';
 import { settingsManager } from '../managers/SettingsManager';
 import type { BackgroundColor } from '../types/Settings';
+import { loadModelList, type ModelInfo } from '../viewer/ModelLoader';
 
 const BACKGROUND_OPTIONS: Array<{ value: BackgroundColor; label: string }> = [
   { value: 'white', label: '白' },
@@ -26,6 +28,12 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const lightIntensity = useSettingsStore((state) => state.lightIntensity);
   const ambientIntensity = useSettingsStore((state) => state.ambientIntensity);
   const cameraFov = useSettingsStore((state) => state.cameraFov);
+  const modelId = useSettingsStore((state) => state.modelId);
+  const lineArtMode = useSettingsStore((state) => state.lineArtMode);
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  useEffect(() => {
+    void loadModelList().then(setModels);
+  }, []);
   return (
     <div className="panel-overlay" role="dialog" aria-label="設定">
       <div className="panel">
@@ -35,6 +43,23 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             ×
           </button>
         </div>
+
+        {models.length > 1 && (
+          <fieldset className="settings-group">
+            <legend>モデル(体型)</legend>
+            {models.map((m) => (
+              <label key={m.id} className="settings-radio">
+                <input
+                  type="radio"
+                  name="modelId"
+                  checked={modelId === m.id}
+                  onChange={() => void settingsManager.update({ modelId: m.id })}
+                />
+                {m.name}
+              </label>
+            ))}
+          </fieldset>
+        )}
 
         <fieldset className="settings-group">
           <legend>背景色</legend>
@@ -50,7 +75,17 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             </label>
           ))}
         </fieldset>
-
+<fieldset className="settings-group">
+          <legend>表示</legend>
+          <label className="settings-checkbox">
+            <input
+              type="checkbox"
+              checked={lineArtMode}
+              onChange={(event) => void settingsManager.update({ lineArtMode: event.target.checked })}
+            />
+            線画モード（輪郭線＋ベタ塗り）
+          </label>
+        </fieldset>
         <fieldset className="settings-group">
           <legend>グリッド</legend>
           <label className="settings-checkbox">

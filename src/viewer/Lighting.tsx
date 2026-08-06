@@ -22,17 +22,19 @@ export function Lighting() {
         position={[x, y, z]}
         intensity={intensity}
         castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
         shadow-camera-left={-2}
         shadow-camera-right={2}
         shadow-camera-top={2}
         shadow-camera-bottom={-2}
         shadow-camera-near={0.5}
         shadow-camera-far={20}
-        shadow-radius={4}
+        shadow-radius={2}
+        shadow-bias={-0.0005}
+        shadow-normalBias={0.02}
       />
-      <directionalLight position={[-x, Math.max(y * 0.5, 1), -z]} intensity={0.3} />
+      <directionalLight position={[-x, Math.max(y * 0.5, 1), -z]} intensity={0.2} />
     </>
   );
 }

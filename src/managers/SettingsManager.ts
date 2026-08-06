@@ -15,6 +15,8 @@ export class SettingsManager {
       // docs/12: 設定読み込み失敗時は初期設定にフォールバックする。
       settings = defaultSettings;
     }
+    // 旧バージョンで保存された設定に新項目(modelId等)が無い場合に備え、初期値とマージする。
+    settings = { ...defaultSettings, ...settings };
 
     this.applyToStores(settings);
   }
@@ -23,9 +25,11 @@ export class SettingsManager {
     const current = useSettingsStore.getState();
     const next: Settings = {
       backgroundColor: partial.backgroundColor ?? current.backgroundColor,
+      modelId: partial.modelId ?? current.modelId ?? 'anatomy',
       defaultTimer: partial.defaultTimer ?? current.defaultTimer,
       autoNext: partial.autoNext ?? current.autoNext,
       showGrid: partial.showGrid ?? current.showGrid,
+      lineArtMode: partial.lineArtMode ?? current.lineArtMode ?? false,
       lightAzimuth: partial.lightAzimuth ?? current.lightAzimuth,
       lightElevation: partial.lightElevation ?? current.lightElevation,
       lightIntensity: partial.lightIntensity ?? current.lightIntensity,
@@ -34,6 +38,12 @@ export class SettingsManager {
     };
 
     this.applyToStores(next);
+    // モデル(体型)が変わったら3Dビューアを再読込し、現在ポーズを新モデル用データで読み直す
+    if (partial.modelId !== undefined && partial.modelId !== current.modelId) {
+      useViewerStore.getState().incrementReloadToken();
+      const { poseManager } = await import('./PoseManager');
+      void poseManager.reloadForModelChange();
+    }
 
     try {
       await storageService.saveSettings(next);

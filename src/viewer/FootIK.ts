@@ -5,8 +5,9 @@ import type { BoneMap } from './BoneMapper';
 
 type Side = 'L' | 'R';
 
-// 足首(footボーン原点)をこの高さに置くと足の裏が床(y=0)に接する。ARP解剖学ボディの実測値。
-const ANKLE_HEIGHT = 0.093;
+// 足首(footボーン原点)をこの高さに置くと足の裏が床(y=0)に接する。
+// モデル読込時に自動計測した値(hips.userData.ankleHeight)を優先し、無ければこの実測既定値。
+const DEFAULT_ANKLE_HEIGHT = 0.093;
 // 全体シフト後、床からこの範囲内にある足を「接地」とみなして脚IKで床へ寄せる。
 // これより高い足は遊脚(上げ足)とみなしFKのまま一切触らない。
 const PLANT_THRESHOLD = 0.1;
@@ -34,10 +35,11 @@ export function applyFootIK(boneMap: BoneMap, pose: Pose): void {
   const footR = boneMap['foot_R' as BoneName];
   if (!hips || !footL || !footR) return;
 
-  // 基準の腰高を初回に記録し、毎回そこへ戻す(シフトの累積を防ぐ)
-  const ud = hips.userData as { baseY?: number };
-  if (ud.baseY === undefined) ud.baseY = hips.position.y;
-  hips.position.y = ud.baseY;
+  // 基準の腰位置を初回に記録し、毎回そこへ戻す(シフトの累積を防ぐ)
+  const ud = hips.userData as { basePos?: THREE.Vector3; ankleHeight?: number };
+  if (ud.basePos === undefined) ud.basePos = hips.position.clone();
+  hips.position.copy(ud.basePos);
+  const ankleHeight = ud.ankleHeight ?? DEFAULT_ANKLE_HEIGHT;
 
   // veto指定なら、基準高に戻すだけで何もしない(FK表示)
   if ((pose as { noFootIk?: boolean }).noFootIk) {
@@ -52,17 +54,29 @@ export function applyFootIK(boneMap: BoneMap, pose: Pose): void {
     footL.getWorldPosition(new THREE.Vector3()).y,
     footR.getWorldPosition(new THREE.Vector3()).y,
   );
-  hips.position.y += ANKLE_HEIGHT - lowest;
+  // 接地シフトはワールド空間で計算し、腰の親空間へ変換して加算する。
+  // フルリグ書き出しでは腰の親が回転を持つコントロール骨(c_root.x等=X軸180°回転)のことがあり、
+  // ローカルYへの単純加算では補正が逆向きに効いて体が宙に浮く(male2で発生した真因)。
+  const dyWorld = ankleHeight - lowest;
+  const hipsParent = hips.parent;
+  if (hipsParent) {
+    const invQ = hipsParent.getWorldQuaternion(new THREE.Quaternion()).invert();
+    const parentScale = hipsParent.getWorldScale(new THREE.Vector3());
+    const dLocal = new THREE.Vector3(0, dyWorld, 0).applyQuaternion(invQ).divide(parentScale);
+    hips.position.add(dLocal);
+  } else {
+    hips.position.y += dyWorld;
+  }
   hips.updateWorldMatrix(true, true);
 
   // 床付近の足だけ、Y座標を ANKLE_HEIGHT へ寄せる(x,zはFKのまま)。
   for (const side of ['L', 'R'] as Side[]) {
     const foot = side === 'L' ? footL : footR;
     const p = foot.getWorldPosition(new THREE.Vector3());
-    const grounded = p.y <= ANKLE_HEIGHT + PLANT_THRESHOLD;
+    const grounded = p.y <= ankleHeight + PLANT_THRESHOLD;
     if (!grounded) continue; // 遊脚はFKのまま
-    if (Math.abs(p.y - ANKLE_HEIGHT) < MIN_ADJUST) continue; // 既に接地
-    solveLegIK(boneMap, side, new THREE.Vector3(p.x, ANKLE_HEIGHT, p.z));
+    if (Math.abs(p.y - ankleHeight) < MIN_ADJUST) continue; // 既に接地
+    solveLegIK(boneMap, side, new THREE.Vector3(p.x, ankleHeight, p.z));
   }
 }
 
@@ -78,12 +92,16 @@ function solveLegIK(boneMap: BoneMap, side: Side, target: THREE.Vector3): void {
   const parent = upperLeg.parent;
   if (!parent) return;
 
-  const L1 = lowerLeg.position.length(); // 股→膝
-  const L2 = foot.position.length();     // 膝→足首
-
   const S = upperLeg.getWorldPosition(new THREE.Vector3());
   const kneeFK = lowerLeg.getWorldPosition(new THREE.Vector3());
   const footWorldFK = foot.getWorldQuaternion(new THREE.Quaternion());
+
+  // 骨の長さは実ワールド距離で取る(股と膝の間に分割骨が挟まるリグ対応)
+  const L1 = S.distanceTo(kneeFK);              // 股→膝
+  const L2 = kneeFK.distanceTo(foot.getWorldPosition(new THREE.Vector3())); // 膝→足首
+
+  // 届かない接地はIKしない(FKのまま)。無理に伸ばすと膝が伸び切りロックされる。
+  if (target.distanceTo(S) > (L1 + L2) * 0.96) return;
 
   // --- 平面内2ボーンIK ---
   const n = target.clone().sub(S);
@@ -122,8 +140,11 @@ function solveLegIK(boneMap: BoneMap, side: Side, target: THREE.Vector3): void {
     target.clone().sub(kneeNow).normalize(),
   );
   const lowerWorldNew = arc2.clone().multiply(lowerLeg.getWorldQuaternion(new THREE.Quaternion()));
-  const upperWorldInv = upperLeg.getWorldQuaternion(new THREE.Quaternion()).invert();
-  lowerLeg.quaternion.copy(upperWorldInv.multiply(lowerWorldNew));
+  // ローカル変換は実際の親基準(分割骨が挟まるリグに対応)
+  const lowerParent = lowerLeg.parent;
+  if (!lowerParent) return;
+  const lowerParentInv = lowerParent.getWorldQuaternion(new THREE.Quaternion()).invert();
+  lowerLeg.quaternion.copy(lowerParentInv.multiply(lowerWorldNew));
   lowerLeg.updateWorldMatrix(true, false);
   foot.updateWorldMatrix(true, false);
 

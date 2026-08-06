@@ -14,6 +14,24 @@ type Side = 'L' | 'R';
 const USE_GLB_MANNEQUIN = true;
 
 const GLB_MODEL_URL = `${import.meta.env.BASE_URL}models/mannequin.glb`;
+
+// 体型モデルの一覧(public/models/models.json)。同一ARPリグでリグ付けしたGLBなら
+// 一覧に追加するだけで全ポーズ・指・IKがそのまま動く。
+export type ModelInfo = { id: string; name: string; file: string };
+const DEFAULT_MODELS: ModelInfo[] = [{ id: 'anatomy', name: '標準ボディ', file: 'mannequin.glb' }];
+let modelListCache: ModelInfo[] | null = null;
+export async function loadModelList(): Promise<ModelInfo[]> {
+  if (modelListCache) return modelListCache;
+  try {
+    const res = await fetch(`${import.meta.env.BASE_URL}models/models.json`);
+    if (!res.ok) throw new Error(String(res.status));
+    const list = (await res.json()) as ModelInfo[];
+    modelListCache = Array.isArray(list) && list.length > 0 ? list : DEFAULT_MODELS;
+  } catch {
+    modelListCache = DEFAULT_MODELS;
+  }
+  return modelListCache;
+}
 // スケール調整は不要: GLB内のArmatureノード自体がscale=0.01を持ち、
 // メッシュ形状はすでに実寸(全高約1.7m)で書き出されている
 // (tools/import-mixamo/.tmp/check-scene-tree.mjsで確認済み)。
@@ -86,12 +104,85 @@ function tagGLBBones(root: THREE.Object3D): void {
       boneName,
     ]),
   );
+  // パス1: 完全一致。パス2: 先頭の "c_" を剥がして再照合(ARPのバージョンや設定に
+  // よって指などの変形ボーンが c_index2.l のように出るモデルへの対応)。
+  const assigned = new Set<BoneName>();
   root.traverse((object) => {
     const boneName = nameToBoneName.get(object.name);
-    if (boneName) {
+    if (boneName && !assigned.has(boneName)) {
       object.userData.bone = boneName;
+      assigned.add(boneName);
     }
   });
+  root.traverse((object) => {
+    const boneName = nameToBoneName.get(object.name.replace(/^c_/, ''));
+    if (boneName && !assigned.has(boneName)) {
+      object.userData.bone = boneName;
+      assigned.add(boneName);
+    }
+  });
+  resolveLimbRoots(root);
+}
+
+// 四肢の付け根role(upperArm/upperLeg)の解決。ARPのエクスポート流儀によって
+//   A) arm_stretch が肩関節そのもの(標準ボディ。arm_twist は同位置の子=枝)
+//   B) c_arm_twist_offset が肩関節で、arm_stretch は上腕の先半分(女性ボディ等)
+// の2通りがある。候補のうち「他方の先祖(親側)にいる骨」が真の関節。
+// 脚も同様(thigh_twist が付け根の流儀と thigh_stretch が付け根の流儀)。
+function resolveLimbRoots(root: THREE.Object3D): void {
+  const byName = new Map<string, THREE.Object3D>();
+  root.traverse((o) => { if (!byName.has(o.name)) byName.set(o.name, o); });
+  const pick = (names: string[]): THREE.Object3D | null => {
+    const cands = names.map((n) => byName.get(n)).filter((o): o is THREE.Object3D => !!o);
+    if (cands.length === 0) return null;
+    if (cands.length === 1) return cands[0];
+    // 他候補の先祖である骨を選ぶ
+    for (const c of cands) {
+      const others = cands.filter((o) => o !== c);
+      if (others.every((o) => { let p = o.parent; while (p) { if (p === c) return true; p = p.parent; } return false; })) {
+        return c;
+      }
+    }
+    return cands[0];
+  };
+  const fix = (role: string, names: string[]) => {
+    const winner = pick(names);
+    if (!winner) return;
+    // 既存のタグを候補全員から外し、勝者にだけ付ける
+    for (const n of names) {
+      const o = byName.get(n);
+      if (o && o.userData.bone === role) delete o.userData.bone;
+    }
+    winner.userData.bone = role;
+  };
+  for (const s of ['l', 'r'] as const) {
+    const S = s.toUpperCase();
+    fix(`upperArm_${S}`, [`arm_stretch${s}`, `c_arm_twist_offset${s}`, `arm_twist_offset${s}`, `arm_twist${s}`]);
+    fix(`upperLeg_${S}`, [`thigh_stretch${s}`, `thigh_twist${s}`]);
+  }
+}
+
+// エクスポート時に混入しがちな補助メッシュ(ARPのコントローラ形状 cs_〜 等)を隠す。
+// 「最大頂点数のスキン付きメッシュ」だけを本体として表示し、他のメッシュは非表示にする。
+function hideAuxMeshes(root: THREE.Object3D): void {
+  let main: THREE.Mesh | null = null;
+  let maxVerts = 0;
+  const meshes: THREE.Mesh[] = [];
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    meshes.push(mesh);
+    const skinned = (mesh as unknown as { isSkinnedMesh?: boolean }).isSkinnedMesh === true;
+    const count = mesh.geometry?.attributes?.position?.count ?? 0;
+    if (skinned && count > maxVerts) {
+      maxVerts = count;
+      main = mesh;
+    }
+  });
+  if (!main) return;
+  for (const mesh of meshes) {
+    if (mesh !== main) mesh.visible = false;
+  }
 }
 
 // 以下はプリミティブ生成版(旧実装)。Three.jsのプリミティブ形状を組み合わせて
@@ -928,12 +1019,23 @@ function loadMannequinPrimitive(): Promise<MannequinModel> {
 
 // GLB版マネキンの読み込み。GLB_BONE_NAME_MAPに基づき`userData.bone`をタグ付けし、
 // BoneMapperが既存のプリミティブ版と同じ仕組みでボーンを収集できるようにする。
-function loadMannequinGLB(): Promise<MannequinModel> {
+function loadMannequinGLB(url: string = GLB_MODEL_URL): Promise<MannequinModel> {
   return new GLTFLoader()
-    .loadAsync(GLB_MODEL_URL)
+    .loadAsync(url)
     .then((gltf) => {
       const root = gltf.scene;
+      root.userData.isMannequin = true; // 線画エフェクトがマネキンだけを対象にするための印
       tagGLBBones(root);
+      hideAuxMeshes(root);
+      measureModel(root);
+      // 影の設定: 本体メッシュが床へ影を落とし、体にも影を受ける(腕の影が胴に落ちる等)
+      root.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (mesh.isMesh && mesh.visible) {
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+        }
+      });
       return { root };
     })
     .catch((error: unknown) => {
@@ -941,6 +1043,48 @@ function loadMannequinGLB(): Promise<MannequinModel> {
     });
 }
 
-export function loadMannequin(): Promise<MannequinModel> {
-  return USE_GLB_MANNEQUIN ? loadMannequinGLB() : loadMannequinPrimitive();
+// モデルごとの採寸をロード時に自動計測し、hipsボーンの userData に載せる。
+// FootIK が ankleHeight(足首の対地高)を参照する。体型ごとに手作業で測らなくてよい。
+function measureModel(root: THREE.Object3D): void {
+  root.updateMatrixWorld(true);
+  const found: { hips: THREE.Object3D | null; footY: number | null; mesh: THREE.Mesh | null } = {
+    hips: null,
+    footY: null,
+    mesh: null,
+  };
+  let maxVerts = 0;
+  root.traverse((obj) => {
+    const boneRole = (obj.userData as { bone?: string }).bone;
+    if (boneRole === 'hips') found.hips = obj;
+    if (boneRole === 'foot_L') found.footY = obj.getWorldPosition(new THREE.Vector3()).y;
+    const mesh = obj as THREE.Mesh;
+    if (mesh.isMesh && mesh.visible) {
+      const count = mesh.geometry?.attributes?.position?.count ?? 0;
+      if (count > maxVerts) {
+        maxVerts = count;
+        found.mesh = mesh;
+      }
+    }
+  });
+  const hipsObj = found.hips;
+  const meshObj = found.mesh;
+  const footY = found.footY;
+  if (!hipsObj || footY === null || !meshObj) return;
+  meshObj.geometry.computeBoundingBox();
+  const box = meshObj.geometry.boundingBox;
+  if (!box) return;
+  const worldBox = box.clone().applyMatrix4(meshObj.matrixWorld);
+  const ankleHeight = footY - worldBox.min.y;
+  if (Number.isFinite(ankleHeight) && ankleHeight > 0 && ankleHeight < 0.3) {
+    (hipsObj.userData as { ankleHeight?: number }).ankleHeight = ankleHeight;
+  }
+}
+
+export async function loadMannequin(modelId?: string): Promise<MannequinModel> {
+  if (!USE_GLB_MANNEQUIN) return loadMannequinPrimitive();
+  if (!modelId) return loadMannequinGLB();
+  const list = await loadModelList();
+  const info = list.find((m) => m.id === modelId) ?? list[0];
+  const url = info ? `${import.meta.env.BASE_URL}models/${info.file}` : GLB_MODEL_URL;
+  return loadMannequinGLB(url);
 }

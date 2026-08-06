@@ -206,7 +206,168 @@ const ARP_BIND_WORLD = {
   pinky2_R: [0.636285, -0.333676, -0.500110, -0.483417],
   pinky3_R: [0.626170, -0.352811, -0.503507, -0.479496],
 };
-const arpBindWorld = (role) => new THREE.Quaternion(...ARP_BIND_WORLD[role]);
+// ★ モデル別の自動較正データ。main()がモデルごとに loadModelCalib() で設定する。
+// 未設定時はハードコードのARP_BIND_WORLD(標準ボディの実測値)にフォールバック。
+let CALIB = null;
+const arpBindWorld = (role) => CALIB
+  ? CALIB.bind[role].clone()
+  : new THREE.Quaternion(...ARP_BIND_WORLD[role]);
+
+// Croquiのrole → GLBボーン名(ピリオド除去後)。ModelLoader.tsのGLB_BONE_NAME_MAPと同一。
+const ROLE_GLB = {
+  hips: 'rootx', spine: 'spine_01x', chest: 'spine_03x', head: 'headx', neck: 'neckx',
+  shoulder_L: 'shoulderl', shoulder_R: 'shoulderr',
+  upperArm_L: 'arm_stretchl', lowerArm_L: 'forearm_stretchl', hand_L: 'handl',
+  upperArm_R: 'arm_stretchr', lowerArm_R: 'forearm_stretchr', hand_R: 'handr',
+  upperLeg_L: 'thigh_stretchl', lowerLeg_L: 'leg_stretchl', foot_L: 'footl',
+  upperLeg_R: 'thigh_stretchr', lowerLeg_R: 'leg_stretchr', foot_R: 'footr',
+};
+for (const side of ['L', 'R']) {
+  for (const fg of ['thumb', 'index', 'middle', 'ring', 'pinky']) {
+    for (let j = 1; j <= 3; j++) ROLE_GLB[`${fg}${j}_${side}`] = `${fg}${j}${side.toLowerCase()}`;
+  }
+}
+
+// 「上」「前」の2方向から正規直交基底の回転を作る(指リターゲットの手の基底用)
+function basisFrom(dirIndexMeta, dirRingMeta, dirMiddleMeta) {
+  const y = dirMiddleMeta.clone().normalize();
+  let z = new THREE.Vector3().crossVectors(dirIndexMeta, dirRingMeta).normalize();
+  const x = new THREE.Vector3().crossVectors(y, z).normalize();
+  z = new THREE.Vector3().crossVectors(x, y).normalize();
+  const m = new THREE.Matrix4().makeBasis(x, y, z);
+  return new THREE.Quaternion().setFromRotationMatrix(m);
+}
+
+// モデルGLBから較正データを自動実測する:
+//  bind    = 各roleのバインドworld回転(bind×deltaの基準)
+//  handBasis = 手の解剖学的基底(指リターゲットのフレーム対応用)
+//  mannequin = 腰まわりの寸法(腰に手IKの目標スナップ用)
+async function loadModelCalib(io, glbPath) {
+  const doc = await io.read(glbPath);
+  const nodes = doc.getRoot().listNodes();
+  const par = new Array(nodes.length).fill(-1);
+  for (const n of nodes) for (const c of n.listChildren()) par[nodes.indexOf(c)] = nodes.indexOf(n);
+  const order = [];
+  {
+    const seen = new Array(nodes.length).fill(false);
+    const vis = (i) => { if (seen[i]) return; if (par[i] >= 0) vis(par[i]); seen[i] = true; order.push(i); };
+    for (let i = 0; i < nodes.length; i++) vis(i);
+  }
+  const W = new Array(nodes.length);
+  for (const i of order) {
+    const m = new THREE.Matrix4().compose(
+      new THREE.Vector3(...nodes[i].getTranslation()),
+      new THREE.Quaternion(...nodes[i].getRotation()),
+      new THREE.Vector3(...nodes[i].getScale()));
+    W[i] = par[i] >= 0 ? new THREE.Matrix4().multiplyMatrices(W[par[i]], m) : m;
+  }
+  const wq = (i) => { const q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3(); W[i].decompose(p, q, sc); return q; };
+  const wp = (i) => new THREE.Vector3().setFromMatrixPosition(W[i]);
+  // role→ノード: 完全一致→先頭c_剥がし の2パス(ModelLoader.tsと同じ規則)
+  const roleOf = new Map(Object.entries(ROLE_GLB).map(([r, g]) => [g, r]));
+  const idxOf = {};
+  const assigned = new Set();
+  for (let pass = 0; pass < 2; pass++) {
+    nodes.forEach((n, i) => {
+      const san = (n.getName() || '').replace(/\./g, '');
+      const key = pass === 0 ? san : san.replace(/^c_/, '');
+      const role = roleOf.get(key);
+      if (role && !assigned.has(role)) { idxOf[role] = i; assigned.add(role); }
+    });
+  }
+  // 四肢の付け根role(upperArm/upperLeg)の解決: 候補のうち「他方の先祖にいる骨」が真の関節。
+  // (ARPの流儀A: arm_stretch=肩関節・twistは同位置の子 / 流儀B: c_arm_twist_offset=肩関節・stretchは先半分)
+  const isAncestor = (a, b) => { let p = par[b]; while (p >= 0) { if (p === a) return true; p = par[p]; } return false; };
+  const sanIdx = new Map();
+  nodes.forEach((n, i) => { const k = (n.getName() || '').replace(/\./g, '').replace(/^c_/, ''); if (!sanIdx.has(k)) sanIdx.set(k, i); });
+  const pickRoot = (names) => {
+    const cands = names.map((n) => sanIdx.get(n)).filter((i) => i != null);
+    if (cands.length <= 1) return cands[0];
+    for (const c of cands) if (cands.every((o) => o === c || isAncestor(c, o))) return c;
+    return cands[0];
+  };
+  for (const sside of ['l', 'r']) {
+    const S = sside.toUpperCase();
+    const arm = pickRoot([`arm_stretch${sside}`, `arm_twist_offset${sside}`, `arm_twist${sside}`]);
+    if (arm != null) idxOf[`upperArm_${S}`] = arm;
+    const leg = pickRoot([`thigh_stretch${sside}`, `thigh_twist${sside}`]);
+    if (leg != null) idxOf[`upperLeg_${S}`] = leg;
+  }
+  const missing = Object.keys(ROLE_GLB).filter((r) => !(r in idxOf));
+  if (missing.length) throw new Error(`モデルにボーンが足りません(${path.basename(glbPath)}): ${missing.join(', ')}`);
+  const bind = {};
+  for (const role of Object.keys(ROLE_GLB)) bind[role] = wq(idxOf[role]);
+  // 手の基底(左右)
+  const handBasis = {};
+  for (const side of ['L', 'R']) {
+    const h = wp(idxOf[`hand_${side}`]);
+    const d = (r) => wp(idxOf[r]).clone().sub(h).normalize().applyQuaternion(wq(idxOf[`hand_${side}`]).clone().invert());
+    handBasis[side] = basisFrom(d(`index1_${side}`), d(`ring1_${side}`), d(`middle1_${side}`));
+  }
+  // 腰まわり寸法(最大スキンメッシュの断面から実測)
+  const rootP = wp(idxOf.hips);
+  const headP = wp(idxOf.head);
+  const hipsToHead = headP.clone().sub(rootP).length();
+  let mainPrim = null, mainNode = null, maxV = 0;
+  for (const n of nodes) {
+    const mesh = n.getMesh();
+    if (!mesh) continue;
+    for (const p of mesh.listPrimitives()) {
+      if (!p.getAttribute('JOINTS_0')) continue;
+      const c = p.getAttribute('POSITION')?.getCount() ?? 0;
+      if (c > maxV) { maxV = c; mainPrim = p; mainNode = n; }
+    }
+  }
+  const mannequin = {
+    hipsToHead, handRadius: 0.04,
+    pelvisHalfWidth: 0.178, pelvisHalfDepth: 0.148,
+    waistHalfWidth: 0.153, waistHalfDepth: 0.138,
+    pelvisY: 0.0, waistY: 0.3 * hipsToHead,
+  };
+  if (mainPrim && mainNode) {
+    const mw = W[nodes.indexOf(mainNode)];
+    const POS = mainPrim.getAttribute('POSITION').getArray();
+    const nV = mainPrim.getAttribute('POSITION').getCount();
+    const slice = (yl) => {
+      const y = rootP.y + yl;
+      let hw = 0, hd = 0;
+      const v3 = new THREE.Vector3();
+      for (let v = 0; v < nV; v++) {
+        v3.set(POS[v * 3], POS[v * 3 + 1], POS[v * 3 + 2]).applyMatrix4(mw);
+        if (Math.abs(v3.y - y) > 0.012) continue;
+        const px = v3.x - rootP.x, pz = v3.z - rootP.z;
+        if (Math.abs(px) > 0.3 || Math.abs(pz) > 0.25) continue; // 腕等を除外
+        hw = Math.max(hw, Math.abs(px)); hd = Math.max(hd, Math.abs(pz));
+      }
+      return { hw, hd };
+    };
+    const pel = slice(mannequin.pelvisY);
+    const wst = slice(mannequin.waistY);
+    if (pel.hw > 0.03) { mannequin.pelvisHalfWidth = pel.hw; mannequin.pelvisHalfDepth = pel.hd; }
+    if (wst.hw > 0.03) { mannequin.waistHalfWidth = wst.hw; mannequin.waistHalfDepth = wst.hd; }
+  }
+  // 腕のレスト垂れ角の正規化。腕の変換(共通Tレスト方式)は「モデルのバインドの腕の
+  // 垂れ具合」がそのまま結果に乗る。実績のある標準ボディの垂れ角を基準(アンカー)とし、
+  // 各モデルの腕バインド方向をアンカーへ揃える補正回転を較正しておく。
+  // (標準・女性は垂れが基準と同等で補正ほぼ0。male2のように垂れの深いバインドだけ起こされる)
+  const ARM_ANCHOR = {
+    L: { upper: new THREE.Vector3(0.9627, -0.2389, -0.1274), fore: new THREE.Vector3(0.9919, 0.0363, 0.1221) },
+    R: { upper: new THREE.Vector3(-0.9627, -0.2389, -0.1274), fore: new THREE.Vector3(-0.9919, 0.0363, 0.1221) },
+  };
+  const armFix = {};
+  for (const side of ['L', 'R']) {
+    const shP = wp(idxOf[`upperArm_${side}`]);
+    const elP = wp(idxOf[`lowerArm_${side}`]);
+    const haP = wp(idxOf[`hand_${side}`]);
+    const dU = elP.clone().sub(shP).normalize();
+    const dF = haP.clone().sub(elP).normalize();
+    armFix[side] = {
+      upper: new THREE.Quaternion().setFromUnitVectors(dU, ARM_ANCHOR[side].upper.clone().normalize()),
+      fore: new THREE.Quaternion().setFromUnitVectors(dF, ARM_ANCHOR[side].fore.clone().normalize()),
+    };
+  }
+  return { bind, handBasis, mannequin, armFix };
+}
 
 const MX_BONE = {
   hips: 'Hips', spine: 'Spine', chest: 'Spine2', head: 'Head',
@@ -280,7 +441,18 @@ function solveFrame(skeleton, restWorld, animWorld /* sides は未使用 */) {
       : restWorld[i].quaternion;
     const mxDelta = animWorld[i].quaternion.clone()
       .multiply(restQ.clone().invert());
-    targetWorld[role] = mxDelta.multiply(arpBindWorld(role));
+    // 腕(上腕/前腕/手)はモデルごとの腕レスト垂れ角の補正(armFix)を挟む。
+    // バインドの腕が深く垂れたモデルでも、共通Tレスト基準と同じ土俵に乗る。
+    let base = arpBindWorld(role);
+    if (CALIB && CALIB.armFix) {
+      const m = /^(upperArm|lowerArm|hand)_(L|R)$/.exec(role);
+      if (m) {
+        const fix = CALIB.armFix[m[2]];
+        const q = m[1] === 'upperArm' ? fix.upper : fix.fore;
+        base = q.clone().multiply(base);
+      }
+    }
+    targetWorld[role] = mxDelta.multiply(base);
   }
   // 肩は胴(chest)に自然に追従させる(クラビクルの上下動は付けない)。
   // ワールド固定だと胴がねじれたポーズで肩が置いていかれ、その"置いていかれ"が
@@ -310,10 +482,21 @@ function solveFrame(skeleton, restWorld, animWorld /* sides は未使用 */) {
   // 解剖学的な手の基底対応 M(実測定数)でARPの手ローカルへ写し、指ボーンの+Yを
   // その方向へ向ける(ロールは親から継承)。フレーム規約差の影響を受けず、
   // 拳の曲がり角がMixamoとほぼ一致する(実測誤差0〜3°)。
-  const FINGER_M = {
-    L: new THREE.Quaternion(0.043585, -0.999013, 0.002957, 0.007988),
-    R: new THREE.Quaternion(0.038067, 0.999142, 0.007200, 0.014617),
-  };
+  // 手の基底対応M = ARPの手基底(モデル実測) × Mixamoの手基底(このFBXのレスト実測)^-1
+  const FINGER_M = {};
+  for (const side of ['L', 'R']) {
+    const Side = side === 'L' ? 'Left' : 'Right';
+    const h = restWorld[B(`${Side}Hand`)];
+    const hq = h.quaternion.clone().invert();
+    const d = (nm) => restWorld[B(nm)].position.clone().sub(h.position).normalize().applyQuaternion(hq);
+    const mxBasis = basisFrom(d(`${Side}HandIndex1`), d(`${Side}HandRing1`), d(`${Side}HandMiddle1`));
+    const arpBasis = CALIB ? CALIB.handBasis[side] : null;
+    FINGER_M[side] = arpBasis
+      ? arpBasis.clone().multiply(mxBasis.clone().invert())
+      : (side === 'L'
+        ? new THREE.Quaternion(0.043585, -0.999013, 0.002957, 0.007988)
+        : new THREE.Quaternion(0.038067, 0.999142, 0.007200, 0.014617));
+  }
   const FINGERS = [['thumb', 'Thumb'], ['index', 'Index'], ['middle', 'Middle'], ['ring', 'Ring'], ['pinky', 'Pinky']];
   const PLUS_Y_AXIS = new THREE.Vector3(0, 1, 0);
   for (const side of ['L', 'R']) {
@@ -443,10 +626,11 @@ function distToSeg(p, a, b) {
 
 /** hips ローカルの高さ y における下胴の楕円半径(手のひらぶん外)を返す */
 function waistEllipseAt(y) {
-  const t = clamp01((y - MANNEQUIN.pelvisY) / (MANNEQUIN.waistY - MANNEQUIN.pelvisY));
-  const halfW = lerp(MANNEQUIN.pelvisHalfWidth, MANNEQUIN.waistHalfWidth, t);
-  const halfD = lerp(MANNEQUIN.pelvisHalfDepth, MANNEQUIN.waistHalfDepth, t);
-  return { ax: halfW + MANNEQUIN.handRadius, az: halfD + MANNEQUIN.handRadius };
+  const MQ = CALIB ? CALIB.mannequin : MANNEQUIN;
+  const t = clamp01((y - MQ.pelvisY) / (MQ.waistY - MQ.pelvisY));
+  const halfW = lerp(MQ.pelvisHalfWidth, MQ.waistHalfWidth, t);
+  const halfD = lerp(MQ.pelvisHalfDepth, MQ.waistHalfDepth, t);
+  return { ax: halfW + MQ.handRadius, az: halfD + MQ.handRadius };
 }
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -462,7 +646,11 @@ function solveHandContacts(skeleton, animWorld, sides) {
   const hipsQuatInv = hips.quaternion.clone().invert();
   const neckPos = animWorld[B('Neck')].position;
   const mixamoTorso = animWorld[B('Head')].position.clone().sub(hipsPos).length() || 1;
-  const toMannequin = MANNEQUIN.hipsToHead / mixamoTorso;
+  const toMannequin = (CALIB ? CALIB.mannequin : MANNEQUIN).hipsToHead / mixamoTorso;
+  // 検出(どの手を接触とみなすか)はモデルに依存させない。モデル尺で判定すると
+  // 体型ごとに接触ポーズの集合が変わってしまう(例: 胴の短い体型で誤検出が増える)。
+  // 固定の基準尺=標準ボディのhipsToHead(0.657)で判定し、配置だけモデル尺で行う。
+  const DETECT_SCALE = 0.657 / mixamoTorso;
 
   const out = {};
   for (const side of ['L', 'R']) {
@@ -478,11 +666,13 @@ function solveHandContacts(skeleton, animWorld, sides) {
     const elbowDeg = THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(v1.dot(v2), -1, 1)));
     if (elbowDeg < CONTACT.elbowMinDeg) continue;
 
-    // 手を hips ローカル→マネキン尺へ
-    const local = handP.clone().sub(hipsPos).applyQuaternion(hipsQuatInv).multiplyScalar(toMannequin);
+    // 手を hips ローカルへ(検出用=固定基準尺 / 配置用=モデル尺 の2本)
+    const localRaw = handP.clone().sub(hipsPos).applyQuaternion(hipsQuatInv);
+    const localDet = localRaw.clone().multiplyScalar(DETECT_SCALE);
+    const local = localRaw.clone().multiplyScalar(toMannequin);
 
-    // (2) 高さ帯(骨盤〜腰)。頭上/肩上や低く前で組む手を除外
-    if (local.y < CONTACT.yMin || local.y > CONTACT.yMax) continue;
+    // (2) 高さ帯(骨盤〜腰)。頭上/肩上や低く前で組む手を除外 ※固定基準尺で判定
+    if (localDet.y < CONTACT.yMin || localDet.y > CONTACT.yMax) continue;
 
     // (3) 胴中心軸への近さ(腕リーチ正規化)。伸ばしきった手を除外
     const reach = armP.distanceTo(foreP) + foreP.distanceTo(handP);
@@ -542,8 +732,22 @@ async function main() {
   const byId = new Map(index.map((p) => [p.id, p]));
   let added = 0, skipped = 0, contactCount = 0;
 
+  // モデル一覧(public/models/models.json)。バインド姿勢がモデルごとに違うため、
+  // ポーズはモデルごとに src/data/poses/<modelId>/ へ焼き分ける。
+  // 較正値(バインド・手の基底・腰寸法)は各GLBから自動実測する。
+  const MODELS_PATH = path.join(ROOT, 'public', 'models', 'models.json');
+  const MODELS = fs.existsSync(MODELS_PATH)
+    ? JSON.parse(fs.readFileSync(MODELS_PATH, 'utf8'))
+    : [{ id: 'anatomy', name: '標準ボディ', file: 'mannequin.glb' }];
+
   const tagDirs = fs.readdirSync(SRC_DIR, { withFileTypes: true })
     .filter((d) => d.isDirectory()).map((d) => d.name);
+
+  for (const model of MODELS) {
+  const modelDir = path.join(POSES_DIR, model.id);
+  fs.mkdirSync(modelDir, { recursive: true });
+  CALIB = await loadModelCalib(io, path.join(ROOT, 'public', 'models', model.file));
+  console.log(`\n===== モデル "${model.id}" (${model.file}) を焼く =====`);
 
   for (const tagDir of tagDirs) {
     const tags = tagDir.split(',').map((t) => t.trim()).filter(Boolean);
@@ -575,7 +779,7 @@ async function main() {
       const firstId = toId(baseName, 1);
 
       // 差分ビルド: 1フレーム目の JSON があればスキップ
-      if (!FORCE && byId.has(firstId) && fs.existsSync(path.join(POSES_DIR, `${firstId}.json`))) {
+      if (!FORCE && byId.has(firstId) && fs.existsSync(path.join(modelDir, `${firstId}.json`))) {
         skipped += percents ? percents.length : frames;
         continue;
       }
@@ -622,7 +826,10 @@ async function main() {
           };
           // 既存ポーズJSONに手書きした手動フラグ(noIk/noFootIk)を引き継ぐ(--force で消さない)。
           // 座り→noIk、ジャンプ等→noFootIk。焼き直しても崩れ対策のvetoが残る。
-          const posePath = path.join(POSES_DIR, `${id}.json`);
+          // 手動フラグの引き継ぎ: モデル別ファイル→(無ければ)旧ルート直下ファイルの順で見る
+          const posePath = fs.existsSync(path.join(modelDir, `${id}.json`))
+            ? path.join(modelDir, `${id}.json`)
+            : path.join(POSES_DIR, `${id}.json`);
           if (fs.existsSync(posePath)) {
             try {
               const prev = JSON.parse(fs.readFileSync(posePath, 'utf8'));
@@ -644,7 +851,7 @@ async function main() {
               .map(([b, v]) => `${b}=(${v.join(', ')})`).join(' / ');
             process.stdout.write(`\n  ↳ 接触検出 [${id}]: ${desc} `);
           }
-          fs.writeFileSync(path.join(POSES_DIR, `${id}.json`), JSON.stringify(pose, null, 2) + '\n');
+          fs.writeFileSync(path.join(modelDir, `${id}.json`), JSON.stringify(pose, null, 2) + '\n');
           byId.set(id, {
             id,
             name: pose.name,
@@ -662,10 +869,21 @@ async function main() {
     }
   }
 
+  } // ← モデルループ終わり
+
+  // 旧構成(ルート直下)のポーズJSONは新構成(モデル別サブディレクトリ)へ移行済みなので削除する。
+  for (const p of byId.values()) {
+    const legacy = path.join(POSES_DIR, `${p.id}.json`);
+    if (fs.existsSync(legacy) && fs.existsSync(path.join(POSES_DIR, MODELS[0].id, `${p.id}.json`))) {
+      fs.unlinkSync(legacy);
+      console.log(`旧ルート直下のJSONを削除(移行済み): ${p.id}`);
+    }
+  }
+
   // 索引の掃除: ポーズJSONが存在しないエントリは除去する(FBX削除や @N を減らした後の残骸対策)。
   // hidden:true のエントリはJSONがある限り残る(隠しただけで消えない)。
   const entries = [...byId.values()].filter((p) => {
-    const ok = fs.existsSync(path.join(POSES_DIR, `${p.id}.json`));
+    const ok = fs.existsSync(path.join(POSES_DIR, MODELS[0].id, `${p.id}.json`));
     if (!ok) console.log(`索引から除去(JSONなし): ${p.id}`);
     return ok;
   });

@@ -1,0 +1,17 @@
+[
+  {
+    "id": "anatomy",
+    "name": "標準ボディ",
+    "file": "mannequin.glb"
+  },
+  {
+    "id": "female",
+    "name": "女性ボディ",
+    "file": "female.glb"
+  },
+  {
+    "id": "male2",
+    "name": "筋肉ボディ",
+    "file": "male2.glb"
+  }
+]

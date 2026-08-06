@@ -24,6 +24,7 @@
     "tags": [
       "立ち"
     ],
+    "hidden": true,
     "thumbnail": null
   },
   {
@@ -238,6 +239,7 @@
     "tags": [
       "Running"
     ],
+    "hidden": true,
     "thumbnail": null
   },
   {

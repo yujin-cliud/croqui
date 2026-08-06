@@ -43,18 +43,23 @@ export function applyArmIK(boneMap: BoneMap, pose: Pose): void {
     const parent = upperArm.parent;
     if (!parent) continue;
 
-    // 骨の長さ(肩→肘 / 肘→手首)をリグから取得
-    const L1 = lowerArm.position.length();
-    const L2 = hand.position.length();
-
     // FKの現在ワールド状態を控える
     const S = upperArm.getWorldPosition(new THREE.Vector3());
     const elbowFK = lowerArm.getWorldPosition(new THREE.Vector3());
     const wristFK = hand.getWorldPosition(new THREE.Vector3());
     const handWorldFK = hand.getWorldQuaternion(new THREE.Quaternion());
 
+    // 骨の長さ(肩→肘 / 肘→手首)は実ワールド距離で取る。ローカルposition.length()は
+    // 上腕と肘の間に分割骨(arm_stretch等)が挟まるリグでは正しくないため。
+    const L1 = S.distanceTo(elbowFK);
+    const L2 = elbowFK.distanceTo(wristFK);
+
     // 目標を hips ローカル→ワールドへ(胴が回っていても接触点が体に追従)
     const T = hips.localToWorld(new THREE.Vector3(ikTarget[0], ikTarget[1], ikTarget[2]));
+
+    // 届かない接触はIKしない(FKのまま)。無理に伸ばすと肘が伸び切りロックされ、
+    // 「少し浮いた手」よりはるかに不自然になる。体型によって届く/届かないは変わる。
+    if (T.distanceTo(S) > (L1 + L2) * 0.96) continue;
 
     // --- 平面内2ボーンIK ---
     const n = T.clone().sub(S);
@@ -91,8 +96,11 @@ export function applyArmIK(boneMap: BoneMap, pose: Pose): void {
       T.clone().sub(elbowNow).normalize(),
     );
     const lowerWorldNew = arc2.clone().multiply(lowerArm.getWorldQuaternion(new THREE.Quaternion()));
-    const upperWorldInv = upperArm.getWorldQuaternion(new THREE.Quaternion()).invert();
-    lowerArm.quaternion.copy(upperWorldInv.multiply(lowerWorldNew));
+    // ローカル変換は実際の親基準(上腕と前腕の間に分割骨が挟まるリグに対応)
+    const lowerParent = lowerArm.parent;
+    if (!lowerParent) continue;
+    const lowerParentInv = lowerParent.getWorldQuaternion(new THREE.Quaternion()).invert();
+    lowerArm.quaternion.copy(lowerParentInv.multiply(lowerWorldNew));
     lowerArm.updateWorldMatrix(true, false);
 
     // --- 手首: FKのワールド向きを維持(前腕が動いたぶんローカルを逆補正) ---

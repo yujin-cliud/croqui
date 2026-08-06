@@ -22,7 +22,7 @@ export function Environment() {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.002, 0]} receiveShadow>
       <circleGeometry args={[6, 48]} />
-      <shadowMaterial opacity={0.25} />
+      <shadowMaterial opacity={0.45} />
     </mesh>
   );
 }
